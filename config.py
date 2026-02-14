@@ -53,3 +53,16 @@ class Config:
         w.strip() for w in os.getenv("COPY_WALLETS", "").split(",") if w.strip()
     ]
     COPY_POLL_INTERVAL: int = int(os.getenv("COPY_POLL_INTERVAL", "5"))
+
+    # WebSocket settings
+    WS_CLOB_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    WS_USER_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
+    WS_RTDS_URL = "wss://ws-live-data.polymarket.com"
+    USE_WEBSOCKET: bool = os.getenv("USE_WEBSOCKET", "true").lower() == "true"
+
+    # Fast polling mode (1-2s for copytrade)
+    FAST_POLL_INTERVAL: float = float(os.getenv("FAST_POLL_INTERVAL", "1.5"))
+
+    # REST client settings
+    REST_TIMEOUT: float = float(os.getenv("REST_TIMEOUT", "3"))  # Faster timeout
+    REST_RETRIES: int = int(os.getenv("REST_RETRIES", "2"))

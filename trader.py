@@ -669,11 +669,17 @@ class TradingState:
 class PaperTrader:
     """Paper trading — logs trades without executing, with realistic simulation."""
 
-    def __init__(self):
+    def __init__(self, market_cache=None):
+        """Initialize paper trader.
+
+        Args:
+            market_cache: Optional MarketDataCache for faster orderbook lookups
+        """
         # Import here to avoid circular import
         from polymarket import PolymarketClient
 
-        self._client = PolymarketClient()
+        self._client = PolymarketClient(timeout=Config.REST_TIMEOUT)
+        self._market_cache = market_cache
 
     def place_bet(
         self,
@@ -726,9 +732,12 @@ class PaperTrader:
         # Query orderbook for realistic simulation
         if token_id:
             try:
+                # Use market cache if available (faster, WebSocket-backed)
+                if self._market_cache:
+                    book = self._market_cache.get_orderbook(token_id)
+                else:
+                    book = self._client.get_orderbook(token_id)
 
-                # Get orderbook for best bid/ask
-                book = self._client.get_orderbook(token_id)
                 if book:
                     bids = book.get("bids", [])
                     asks = book.get("asks", [])
@@ -738,11 +747,19 @@ class PaperTrader:
                         best_ask = min(float(a["price"]) for a in asks)
 
                 # Get execution price with slippage and copy delay impact
-                exec_price, spread, slippage_pct, fill_pct, delay_impact_pct = (
-                    self._client.get_execution_price(
-                        token_id, "BUY", amount, copy_delay_ms
+                if self._market_cache:
+                    exec_price, spread, slippage_pct, fill_pct, delay_impact_pct = (
+                        self._market_cache.get_execution_price(
+                            token_id, "BUY", amount, copy_delay_ms
+                        )
                     )
-                )
+                else:
+                    exec_price, spread, slippage_pct, fill_pct, delay_impact_pct = (
+                        self._client.get_execution_price(
+                            token_id, "BUY", amount, copy_delay_ms
+                        )
+                    )
+
                 if exec_price > 0:
                     execution_price = exec_price
                     # Recalculate fee at actual execution price

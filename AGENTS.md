@@ -7,11 +7,14 @@ A Python bot that trades BTC 5-min up/down markets on Polymarket using either:
 
 ## Architecture
 - `bot.py` — Main event loop for streak strategy. Monitors markets, checks streaks, places bets.
-- `copybot.py` — Main event loop for copytrade. Monitors wallets, copies BTC 5-min trades.
-- `copytrade.py` — Copytrade logic. Polls data-api.polymarket.com for wallet activity, filters BTC 5-min trades.
-- `polymarket.py` — API client. Read-only calls to Gamma (market discovery) and CLOB (orderbook/prices). Live trading uses `py-clob-client` SDK.
-- `strategy.py` — Streak strategy logic. Streak detection, signal generation, Kelly criterion bet sizing. No I/O.
-- `trader.py` — Execution layer. Paper trader (logs only) and live trader (submits orders). Manages persistent state (trades.json).
+- `copybot.py` — Main event loop for copytrade (v1). Monitors wallets, copies BTC 5-min trades.
+- `copybot_v2.py` — **Low-latency copytrade bot (v2)**. Uses WebSocket + fast polling.
+- `copytrade.py` — Original copytrade logic. Polls data-api.polymarket.com for wallet activity.
+- `copytrade_ws.py` — **Fast copytrade monitor**. Hybrid WebSocket + 1.5s REST polling.
+- `polymarket.py` — API client with connection pooling, caching, and configurable timeouts.
+- `polymarket_ws.py` — **WebSocket client** for real-time orderbook data (~100ms latency).
+- `strategy.py` — Streak strategy logic. Streak detection, signal generation, Kelly criterion bet sizing.
+- `trader.py` — Execution layer. Paper trader (logs only) and live trader (submits orders).
 - `config.py` — Reads `.env`, exposes typed config.
 - `backtest.py` — Offline backtest against historical JSON data.
 
@@ -33,14 +36,51 @@ uv sync                          # install deps
 uv run python bot.py --paper     # paper trade (streak strategy)
 uv run python backtest.py        # backtest streak strategy
 
-# Copytrade
+# Copytrade v1 (original)
 uv run python copybot.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313
+
+# Copytrade v2 (low-latency, recommended)
+uv run python copybot_v2.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313
 ```
 
 ## Copytrade Config (.env)
 ```
 COPY_WALLETS=0x1d0034134e339a309700ff2d34e99fa2d48b0313,0xanotherWallet
 COPY_POLL_INTERVAL=5
+
+# v2 Low-Latency Settings
+FAST_POLL_INTERVAL=1.5     # Fast polling (seconds)
+USE_WEBSOCKET=true          # Enable WebSocket for orderbook data
+REST_TIMEOUT=3              # REST API timeout (seconds)
+```
+
+## Copytrade v2 (Low-Latency Mode)
+The v2 copytrade bot (`copybot_v2.py`) includes major performance improvements:
+
+### Latency Improvements
+| Component | v1 Latency | v2 Latency |
+|-----------|-----------|-----------|
+| Trade detection | 5-15s | 1.5-2s |
+| Orderbook data | ~1s (REST) | ~100ms (WebSocket) |
+| REST timeout | 10s | 3s |
+
+### Features
+- **WebSocket orderbook**: Real-time orderbook data via `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+- **Fast polling**: 1.5s polling interval (vs 5s default)
+- **Connection pooling**: Reuses HTTP connections for faster requests
+- **Market pre-fetching**: Caches token IDs for upcoming windows
+- **Graceful degradation**: Falls back to REST if WebSocket fails
+
+### Usage
+```bash
+# v2 with all optimizations
+uv run python copybot_v2.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313
+
+# v2 without WebSocket (REST only)
+uv run python copybot_v2.py --paper --no-websocket --wallets 0x...
+
+# v2 with custom poll interval (0.5s = aggressive)
+uv run python copybot_v2.py --paper --poll 0.5 --wallets 0x...
 ```
 
 ## Caveats

@@ -7,5 +7,7 @@ dependencies = [
     "py-clob-client>=0.34.5",
     "python-dotenv>=1.2.1",
     "requests>=2.32.5",
+    "urllib3>=2.0.0",
     "web3>=7.14.1",
+    "websockets>=12.0",
 ]

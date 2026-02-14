@@ -786,7 +786,9 @@ dependencies = [
     { name = "py-clob-client" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "urllib3" },
     { name = "web3" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -794,7 +796,9 @@ requires-dist = [
     { name = "py-clob-client", specifier = ">=0.34.5" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "requests", specifier = ">=2.32.5" },
+    { name = "urllib3", specifier = ">=2.0.0" },
     { name = "web3", specifier = ">=7.14.1" },
+    { name = "websockets", specifier = ">=12.0" },
 ]
 
 [[package]]

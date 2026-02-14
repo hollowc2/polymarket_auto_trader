@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from config import Config
 
@@ -29,22 +31,68 @@ class Market:
 
 
 class PolymarketClient:
-    """Read-only client for Polymarket APIs (no auth needed)."""
+    """Read-only client for Polymarket APIs (no auth needed).
 
-    def __init__(self):
+    Features:
+    - Connection pooling for better performance
+    - Configurable timeouts and retries
+    - Token ID caching for BTC 5-min markets
+    """
+
+    def __init__(self, timeout: float | None = None, use_cache: bool = True):
         self.gamma = Config.GAMMA_API
         self.clob = Config.CLOB_API
+        self.timeout = timeout or Config.REST_TIMEOUT
+
+        # Create session with connection pooling
         self.session = requests.Session()
-        self.session.headers.update(
-            {"User-Agent": "PolymarketBot/1.0", "Accept": "application/json"}
+
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=Config.REST_RETRIES,
+            backoff_factor=0.1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
         )
 
-    def get_market(self, timestamp: int) -> Market | None:
-        """Fetch a BTC 5-min market by its timestamp."""
+        # Configure connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=20,
+            pool_maxsize=20,
+            max_retries=retry_strategy,
+        )
+        self.session.mount("https://", adapter)
+
+        self.session.headers.update({
+            "User-Agent": "PolymarketBot/2.0",
+            "Accept": "application/json",
+            "Connection": "keep-alive",
+        })
+
+        # Token ID cache for BTC 5-min markets: timestamp -> (up_token, down_token)
+        self._token_cache: dict[int, tuple[str | None, str | None]] = {}
+        self._market_cache: dict[int, Market] = {}
+        self._cache_ttl = 300  # 5 minutes
+        self._use_cache = use_cache
+
+    def get_market(self, timestamp: int, use_cache: bool = True) -> Market | None:
+        """Fetch a BTC 5-min market by its timestamp.
+
+        Args:
+            timestamp: Unix timestamp of the market
+            use_cache: Whether to use cached market data (for token IDs)
+        """
+        # Check cache first (for recently fetched markets)
+        if use_cache and self._use_cache and timestamp in self._market_cache:
+            cached = self._market_cache[timestamp]
+            # Only return cached if not resolved (prices may change)
+            if not cached.closed:
+                return cached
+
         slug = f"btc-updown-5m-{timestamp}"
         try:
             resp = self.session.get(
-                f"{self.gamma}/events", params={"slug": slug}, timeout=10
+                f"{self.gamma}/events", params={"slug": slug}, timeout=self.timeout
             )
             resp.raise_for_status()
             data = resp.json()
@@ -61,6 +109,9 @@ class PolymarketClient:
             token_ids = json.loads(m.get("clobTokenIds", "[]"))
             up_token = token_ids[0] if len(token_ids) > 0 else None
             down_token = token_ids[1] if len(token_ids) > 1 else None
+
+            # Cache token IDs (these never change)
+            self._token_cache[timestamp] = (up_token, down_token)
 
             # Parse prices
             prices = json.loads(m.get("outcomePrices", "[0.5, 0.5]"))
@@ -87,11 +138,13 @@ class PolymarketClient:
             taker_fee_bps = m.get("takerBaseFee")
             if taker_fee_bps is None:
                 taker_fee_bps = 1000
-                print(f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps")
+                # Only log once per market
+                if timestamp not in self._token_cache:
+                    print(f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps")
             else:
                 taker_fee_bps = int(taker_fee_bps)
 
-            return Market(
+            market = Market(
                 timestamp=timestamp,
                 slug=slug,
                 title=event.get("title", ""),
@@ -106,9 +159,52 @@ class PolymarketClient:
                 taker_fee_bps=taker_fee_bps,
                 resolved=is_resolved,
             )
+
+            # Cache market
+            if self._use_cache:
+                self._market_cache[timestamp] = market
+
+            return market
+        except requests.exceptions.Timeout:
+            # Don't spam logs for timeouts
+            return None
         except Exception as e:
             print(f"[polymarket] Error fetching {slug}: {e}")
             return None
+
+    def get_token_ids(self, timestamp: int) -> tuple[str | None, str | None]:
+        """Get cached token IDs for a market, fetching if needed.
+
+        Returns: (up_token_id, down_token_id)
+        """
+        if timestamp in self._token_cache:
+            return self._token_cache[timestamp]
+
+        # Fetch market to populate cache
+        market = self.get_market(timestamp)
+        if market:
+            return (market.up_token_id, market.down_token_id)
+        return (None, None)
+
+    def prefetch_markets(self, timestamps: list[int]) -> int:
+        """Pre-fetch and cache multiple markets.
+
+        Returns number of successfully fetched markets.
+        """
+        success = 0
+        for ts in timestamps:
+            if self.get_market(ts) is not None:
+                success += 1
+        return success
+
+    def get_upcoming_market_timestamps(self, count: int = 5) -> list[int]:
+        """Get timestamps of upcoming BTC 5-min windows.
+
+        Useful for pre-fetching market data.
+        """
+        now = int(time.time())
+        current_window = (now // 300) * 300
+        return [current_window + (i * 300) for i in range(count)]
 
     def get_recent_outcomes(self, count: int = 10) -> list[str]:
         """Get the last N resolved market outcomes (oldest first)."""
@@ -149,25 +245,94 @@ class PolymarketClient:
         """Get order book for a token."""
         try:
             resp = self.session.get(
-                f"{self.clob}/book", params={"token_id": token_id}, timeout=10
+                f"{self.clob}/book", params={"token_id": token_id}, timeout=self.timeout
             )
             resp.raise_for_status()
             return resp.json()
+        except requests.exceptions.Timeout:
+            # Silent timeout - caller can use fallback
+            return {}
         except Exception as e:
             print(f"[polymarket] Error fetching orderbook: {e}")
             return {}
 
-    def get_midpoint(self, token_id: str) -> float | None:
-        """Get midpoint price for a token."""
+    def get_orderbooks(self, token_ids: list[str]) -> dict[str, dict]:
+        """Get multiple order books in batch (if supported).
+
+        Falls back to individual requests if batch not available.
+        """
+        # Try batch endpoint first
         try:
             resp = self.session.get(
-                f"{self.clob}/midpoint", params={"token_id": token_id}, timeout=10
+                f"{self.clob}/books",
+                params={"token_ids": ",".join(token_ids)},
+                timeout=self.timeout,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception:
+            pass
+
+        # Fallback to individual requests
+        results = {}
+        for tid in token_ids:
+            book = self.get_orderbook(tid)
+            if book:
+                results[tid] = book
+        return results
+
+    def get_midpoint(self, token_id: str) -> float | None:
+        """Get midpoint price for a token.
+
+        Faster than get_orderbook for just getting the mid price.
+        """
+        try:
+            resp = self.session.get(
+                f"{self.clob}/midpoint", params={"token_id": token_id}, timeout=self.timeout
             )
             resp.raise_for_status()
             data = resp.json()
             return float(data.get("mid", 0.5))
+        except requests.exceptions.Timeout:
+            return None
         except Exception as e:
             print(f"[polymarket] Error fetching midpoint: {e}")
+            return None
+
+    def get_price(self, token_id: str, side: str = "BUY") -> float | None:
+        """Get best price for a token (fastest endpoint).
+
+        Args:
+            token_id: Token to get price for
+            side: "BUY" returns best ask, "SELL" returns best bid
+        """
+        try:
+            resp = self.session.get(
+                f"{self.clob}/price",
+                params={"token_id": token_id, "side": side},
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return float(data.get("price", 0.5))
+        except Exception:
+            return None
+
+    def get_spread(self, token_id: str) -> tuple[float, float] | None:
+        """Get bid-ask spread for a token.
+
+        Returns: (best_bid, best_ask) or None
+        """
+        try:
+            resp = self.session.get(
+                f"{self.clob}/spread",
+                params={"token_id": token_id},
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return (float(data.get("bid", 0)), float(data.get("ask", 0)))
+        except Exception:
             return None
 
     def get_fee_rate(self, token_id: str) -> int:
@@ -179,11 +344,13 @@ class PolymarketClient:
         DEFAULT_FEE_BPS = 1000  # Fallback: 10% base rate (typical Polymarket fee)
         try:
             resp = self.session.get(
-                f"{self.clob}/fee-rate", params={"token_id": token_id}, timeout=10
+                f"{self.clob}/fee-rate", params={"token_id": token_id}, timeout=self.timeout
             )
             resp.raise_for_status()
             data = resp.json()
             return int(data.get("base_fee", DEFAULT_FEE_BPS))
+        except requests.exceptions.Timeout:
+            return DEFAULT_FEE_BPS
         except Exception as e:
             print(f"[polymarket] Error fetching fee rate: {e}, using default {DEFAULT_FEE_BPS} bps")
             return DEFAULT_FEE_BPS
