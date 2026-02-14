@@ -1,0 +1,11 @@
+[project]
+name = "polymarket-bot"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "py-clob-client>=0.34.5",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "web3>=7.14.1",
+]
