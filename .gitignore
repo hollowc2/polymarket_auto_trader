@@ -1,5 +1,7 @@
 .env
+.envrc
 .venv/
+.direnv/
 __pycache__/
 *.pyc
 trades.json
