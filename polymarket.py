@@ -25,6 +25,7 @@ class Market:
     volume: float
     accepting_orders: bool
     taker_fee_bps: int = 1000  # Default 10% base fee
+    resolved: bool = False  # True when umaResolutionStatus == "resolved"
 
 
 class PolymarketClient:
@@ -67,11 +68,19 @@ class PolymarketClient:
             down_price = float(prices[1]) if len(prices) > 1 else 0.5
 
             # Determine outcome if resolved
+            # A market is truly resolved when:
+            # 1. closed=true AND
+            # 2. umaResolutionStatus="resolved" (or outcomePrices shows 1.0/0.0)
             outcome = None
-            if m.get("closed"):
-                if up_price == 1.0:
+            is_closed = m.get("closed", False)
+            uma_status = m.get("umaResolutionStatus", "")
+            is_resolved = uma_status == "resolved"
+
+            if is_closed and (is_resolved or up_price > 0.99 or down_price > 0.99):
+                # Use threshold comparison to handle float precision
+                if up_price > 0.99:
                     outcome = "up"
-                elif down_price == 1.0:
+                elif down_price > 0.99:
                     outcome = "down"
 
             # Extract fee rate from market data (already in Gamma response)
@@ -95,6 +104,7 @@ class PolymarketClient:
                 volume=event.get("volume", 0),
                 accepting_orders=m.get("acceptingOrders", False),
                 taker_fee_bps=taker_fee_bps,
+                resolved=is_resolved,
             )
         except Exception as e:
             print(f"[polymarket] Error fetching {slug}: {e}")
