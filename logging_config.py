@@ -217,32 +217,25 @@ class StructuredLogger:
         losses: int = 0,
         **kwargs
     ):
-        """Log trade settlement with visual formatting."""
-        if won:
-            symbol = self._c(Colors.GREEN + Colors.BOLD, "✓ WIN")
-            pnl_str = self._c(Colors.GREEN, f"+${pnl:.2f}")
-        else:
-            symbol = self._c(Colors.RED + Colors.BOLD, "✗ LOSS")
-            pnl_str = self._c(Colors.RED, f"-${abs(pnl):.2f}")
-
+        """Log trade settlement - clean, single line."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
         ts_str = self._c(Colors.DIM, f"[{ts}]")
 
-        # Main settlement line
-        direction_str = self._c(Colors.CYAN, direction.upper())
-        outcome_str = self._c(Colors.YELLOW, outcome.upper())
+        if won:
+            result = self._c(Colors.GREEN + Colors.BOLD, "WIN ")
+            pnl_str = self._c(Colors.GREEN, f"+${pnl:.2f}")
+        else:
+            result = self._c(Colors.RED + Colors.BOLD, "LOSS")
+            pnl_str = self._c(Colors.RED, f"-${abs(pnl):.2f}")
 
-        fee_pct = kwargs.get("fee_pct", 0)
-        fee_str = f" (fee: {fee_pct:.1%})" if won and fee_pct > 0 else ""
-
-        line1 = f"{ts_str} {symbol} {direction_str} → {outcome_str} | PnL: {pnl_str}{fee_str}"
-        print(line1)
-
-        # Stats line
+        direction_str = direction.upper()
+        outcome_str = outcome.upper()
         total = wins + losses
         win_rate = (wins / total * 100) if total > 0 else 0
-        stats = self._c(Colors.DIM, f"       {wins}W/{losses}L ({win_rate:.0f}%) | Bank: ${bankroll:.2f} | Pending: {pending}")
-        print(stats)
+
+        # Clean single-line format
+        line = f"{ts_str} {result} {direction_str}→{outcome_str} {pnl_str} | {wins}W/{losses}L ({win_rate:.0f}%) | ${bankroll:.2f}"
+        print(line)
 
     def copy_signal(
         self,
@@ -254,7 +247,7 @@ class StructuredLogger:
         our_amount: float = 0,
         **kwargs
     ):
-        """Log copy trade signal with visual formatting."""
+        """Log copy trade signal with full details."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
         ts_str = self._c(Colors.DIM, f"[{ts}]")
 
@@ -294,7 +287,7 @@ class StructuredLogger:
         ws_connected: bool = False,
         **kwargs
     ):
-        """Log compact periodic heartbeat."""
+        """Log periodic heartbeat with status."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
         ts_str = self._c(Colors.DIM, f"[{ts}]")
 
@@ -338,7 +331,7 @@ class StructuredLogger:
         self,
         trades: list[dict],
     ):
-        """Log pending trades summary."""
+        """Log pending trades with up/down percentages."""
         if not trades:
             return
 

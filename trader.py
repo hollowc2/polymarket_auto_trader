@@ -80,6 +80,43 @@ class Trade:
     unrealized_pnl: float | None = None  # estimated PnL based on current price
     implied_outcome: str | None = None  # "up" or "down" based on which side > 50%
 
+    # === PATTERN ANALYSIS FIELDS ===
+    # Time-based patterns
+    hour_utc: int | None = None  # Hour of day (0-23) in UTC
+    minute_of_hour: int | None = None  # Minute within the hour (0-59)
+    day_of_week: int | None = None  # Day of week (0=Monday, 6=Sunday)
+    seconds_into_window: int | None = None  # How many seconds after window opened we entered
+
+    # Session tracking
+    session_trade_number: int | None = None  # Which trade # in this session
+    session_wins_before: int | None = None  # Session wins before this trade
+    session_losses_before: int | None = None  # Session losses before this trade
+    session_pnl_before: float | None = None  # Session PnL before this trade
+    bankroll_before: float | None = None  # Bankroll before this trade
+
+    # Streak tracking
+    consecutive_wins: int = 0  # How many wins in a row before this trade
+    consecutive_losses: int = 0  # How many losses in a row before this trade
+
+    # Market context
+    opposite_price: float | None = None  # Price of the opposite outcome
+    price_ratio: float | None = None  # our_price / opposite_price
+    market_bias: str | None = None  # "bullish" (up>down), "bearish", or "neutral"
+
+    # Trader analysis (for copytrade)
+    trader_recent_trades: int | None = None  # How many recent trades from this trader
+    trader_recent_wins: int | None = None  # Wins in recent trades
+    trader_win_rate: float | None = None  # Trader's observed win rate
+
+    # Resolution timing
+    window_close_time: int | None = None  # When the 5-min window closes (unix)
+    resolution_time: int | None = None  # When market actually resolved (unix)
+    resolution_delay_seconds: float | None = None  # Seconds between close and resolution
+
+    # Outcome analysis
+    price_at_close: float | None = None  # Our direction's price when window closed
+    final_price: float | None = None  # Our direction's price after resolution (0 or 1)
+
     def to_history_dict(self) -> dict:
         """Convert trade to a detailed history dictionary."""
         exec_time = datetime.fromtimestamp(
@@ -179,11 +216,31 @@ class TradingState:
         self.trades.append(trade)
         self.daily_bets += 1
 
-    def settle_trade(self, trade: Trade, outcome: str):
-        """Settle a trade and calculate all P&L details."""
+    def settle_trade(self, trade: Trade, outcome: str, market: "Market | None" = None):
+        """Settle a trade and calculate all P&L details.
+
+        Args:
+            trade: The trade to settle
+            outcome: The market outcome ("up" or "down")
+            market: Optional market object for resolution timing data
+        """
         trade.outcome = outcome
         trade.won = trade.direction == outcome
         trade.settled_at = int(time.time() * 1000)
+
+        # Resolution timing - how long after window close did it resolve?
+        if trade.window_close_time:
+            resolution_time = int(time.time())
+            trade.resolution_time = resolution_time
+            trade.resolution_delay_seconds = resolution_time - trade.window_close_time
+
+        # Final prices at resolution
+        if market:
+            trade.final_price = 1.0 if trade.won else 0.0
+            if trade.direction == "up":
+                trade.price_at_close = market.up_price
+            else:
+                trade.price_at_close = market.down_price
 
         # Use execution price (includes slippage) if available, else entry_price
         exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
@@ -782,6 +839,30 @@ class PaperTrader:
                 f"[PAPER] ⚠️  Partial fill: {fill_pct:.1f}% of ${amount:.2f} = ${filled_amount:.2f}"
             )
 
+        # === PATTERN ANALYSIS DATA ===
+        # Time-based patterns
+        exec_dt = datetime.fromtimestamp(executed_at / 1000, tz=timezone.utc)
+        hour_utc = exec_dt.hour
+        minute_of_hour = exec_dt.minute
+        day_of_week = exec_dt.weekday()  # 0=Monday, 6=Sunday
+
+        # How far into the 5-min window are we entering?
+        window_start = market.timestamp
+        seconds_into_window = int(executed_at / 1000) - window_start
+        window_close_time = window_start + 300  # 5 min window
+
+        # Market context - opposite outcome price
+        opposite_price = market.down_price if direction == "up" else market.up_price
+        price_ratio = entry_price / opposite_price if opposite_price > 0 else 1.0
+
+        # Market bias based on prices
+        if market.up_price > 0.52:
+            market_bias = "bullish"
+        elif market.down_price > 0.52:
+            market_bias = "bearish"
+        else:
+            market_bias = "neutral"
+
         trade = Trade(
             timestamp=market.timestamp,
             market_slug=market.slug,
@@ -810,15 +891,23 @@ class PaperTrader:
             market_volume=market_volume,
             best_bid=best_bid,
             best_ask=best_ask,
+            # Pattern analysis fields
+            hour_utc=hour_utc,
+            minute_of_hour=minute_of_hour,
+            day_of_week=day_of_week,
+            seconds_into_window=seconds_into_window,
+            window_close_time=window_close_time,
+            opposite_price=opposite_price,
+            price_ratio=price_ratio,
+            market_bias=market_bias,
             **kwargs,  # pass copytrade fields
         )
 
-        # Log based on strategy type
+        # Log trade details with fee, spread, slippage
         spread_cents = spread * 100  # Convert to cents for display
         if kwargs.get("strategy") == "copytrade":
             trader = kwargs.get("trader_name", "unknown")
             trader_amt = kwargs.get("trader_amount", 0)
-            delay = kwargs.get("copy_delay_ms", 0)
             delay_info = f" | Delay impact: +{delay_impact_pct:.2f}%" if delay_impact_pct > 0 else ""
             print(
                 f"[PAPER] Copied {trader}: ${filled_amount:.2f} on {direction.upper()} @ {execution_price:.3f} "

@@ -224,9 +224,19 @@ Examples:
     for w in wallets:
         log.status_line(f"  └─ {w[:10]}...{w[-6:]}")
 
-    # Track what markets we've already copied
-    copied_markets: set[tuple[str, int]] = set()  # (wallet, market_ts)
-    pending: list = []
+    # Track what markets we've already copied (initialize from state to avoid duplicates)
+    copied_markets: set[tuple[str, int]] = set()
+    for t in state.trades:
+        if t.copied_from and t.timestamp:
+            copied_markets.add((t.copied_from, t.timestamp))
+
+    # Initialize pending from unsettled trades in state (survives restart)
+    pending: list = [t for t in state.trades if t.outcome is None]
+    if pending:
+        log.status_line(f"Resuming {len(pending)} unsettled trade(s) from previous session")
+    if copied_markets:
+        log.status_line(f"Loaded {len(copied_markets)} previously copied market(s)")
+
     session_wins = 0
     session_losses = 0
     session_pnl = 0.0
@@ -242,12 +252,18 @@ Examples:
     last_stats_time = time.time()
     polls_since_stats = 0
 
-    while running:
+    bankrupt = False  # Flag for immediate exit on bankruptcy
+
+    while running and not bankrupt:
         try:
             now = int(time.time())
             poll_start = time.time()
 
             # === SETTLE PENDING TRADES ===
+            # Sort by timestamp to settle in chronological order (oldest markets first)
+            pending.sort(key=lambda t: t.timestamp)
+
+            # BTC 5-min markets resolve ~30-90 seconds after window closes
             for trade in list(pending):
                 try:
                     # Use circuit breaker for API calls
@@ -262,11 +278,12 @@ Examples:
                         time.sleep(min(wait, 0.5))
                         continue
 
-                    market = client.get_market(trade.timestamp)
+                    # IMPORTANT: use_cache=False to get fresh resolution status
+                    market = client.get_market(trade.timestamp, use_cache=False)
                     api_circuit.record_success()
 
                     if market and market.closed and market.outcome:
-                        state.settle_trade(trade, market.outcome)
+                        state.settle_trade(trade, market.outcome, market=market)
                         won = trade.direction == market.outcome
 
                         if won:
@@ -290,6 +307,21 @@ Examples:
                         pending.remove(trade)
                         state.save()
 
+                        # === IMMEDIATE BANKRUPTCY CHECK ===
+                        # Just like real trading: if you can't afford the next bet, you're done
+                        if state.bankroll < Config.MIN_BET:
+                            log.status_line("")
+                            log.status_line("╔════════════════════════════════════════╗")
+                            log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
+                            log.status_line("╠════════════════════════════════════════╣")
+                            log.status_line(f"║  Final Bankroll: ${state.bankroll:.2f}".ljust(41) + "║")
+                            log.status_line(f"║  Minimum Required: ${Config.MIN_BET:.2f}".ljust(41) + "║")
+                            log.status_line(f"║  Session P&L: ${session_pnl:+.2f}".ljust(41) + "║")
+                            log.status_line(f"║  Record: {session_wins}W / {session_losses}L".ljust(41) + "║")
+                            log.status_line("╚════════════════════════════════════════╝")
+                            bankrupt = True
+                            break  # Exit the for loop
+
                 except CircuitOpenError:
                     log.warning("circuit_open", action="settle_trade")
                     break
@@ -301,12 +333,31 @@ Examples:
                     else:
                         log.warning("settle_error_retry", error=str(e))
 
+            # Exit immediately if bankrupt
+            if bankrupt:
+                break
+
             # === CHECK IF WE CAN TRADE ===
             can_trade, reason = state.can_trade()
             if not can_trade:
-                if "Bankroll too low" in reason or "Max daily loss" in reason:
-                    log.warning("trading_stopped", reason=reason)
+                if "Bankroll too low" in reason:
+                    log.status_line("")
+                    log.status_line("╔════════════════════════════════════════╗")
+                    log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
+                    log.status_line("╚════════════════════════════════════════╝")
+                    log.status_line(f"Bankroll ${state.bankroll:.2f} < Min bet ${Config.MIN_BET:.2f}")
                     break
+                elif "Max daily loss" in reason:
+                    log.status_line("")
+                    log.status_line("╔════════════════════════════════════════╗")
+                    log.status_line("║  SIMULATION ENDED - DAILY LOSS LIMIT   ║")
+                    log.status_line("╚════════════════════════════════════════╝")
+                    log.status_line(f"Daily P&L: ${state.daily_pnl:.2f} exceeded -${Config.MAX_DAILY_LOSS:.2f} limit")
+                    break
+                elif "Max daily bets" in reason:
+                    log.status_line(f"Daily bet limit reached ({Config.MAX_DAILY_BETS}), waiting for reset...")
+                    time.sleep(30)
+                    continue
                 else:
                     time.sleep(30)
                     continue
@@ -374,8 +425,24 @@ Examples:
 
                 # === COPY THE TRADE ===
                 direction = sig.direction.lower()
+
+                # Strict bankroll check - can't bet more than you have
+                if state.bankroll < Config.MIN_BET:
+                    log.status_line("")
+                    log.status_line("╔════════════════════════════════════════╗")
+                    log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
+                    log.status_line("╚════════════════════════════════════════╝")
+                    log.status_line(f"Cannot place ${Config.MIN_BET:.2f} bet with ${state.bankroll:.2f} bankroll")
+                    bankrupt = True
+                    break
+
+                # Bet the requested amount, but never more than bankroll
                 amount = min(bet_amount, state.bankroll)
-                amount = max(Config.MIN_BET, amount)
+                if amount < Config.MIN_BET:
+                    log.warning("skip_insufficient_funds",
+                        requested=bet_amount, available=state.bankroll, minimum=Config.MIN_BET)
+                    copied_markets.add(key)
+                    continue
 
                 # Calculate copy delay
                 now_ms = int(time.time() * 1000)
@@ -391,6 +458,26 @@ Examples:
                     our_amount=amount,
                 )
 
+                # === SESSION TRACKING FOR PATTERN ANALYSIS ===
+                session_trade_number = len(copied_markets) + 1
+
+                # Calculate consecutive wins/losses from recent settled trades
+                consecutive_wins = 0
+                consecutive_losses = 0
+                for t in reversed(state.trades):
+                    if t.outcome is None:
+                        continue  # Skip pending
+                    if t.won:
+                        if consecutive_losses == 0:
+                            consecutive_wins += 1
+                        else:
+                            break
+                    else:
+                        if consecutive_wins == 0:
+                            consecutive_losses += 1
+                        else:
+                            break
+
                 trade = trader.place_bet(
                     market=market,
                     direction=direction,
@@ -405,6 +492,14 @@ Examples:
                     trader_price=sig.price,
                     trader_timestamp=sig.trade_ts,
                     copy_delay_ms=copy_delay_ms,
+                    # Session tracking
+                    session_trade_number=session_trade_number,
+                    session_wins_before=session_wins,
+                    session_losses_before=session_losses,
+                    session_pnl_before=session_pnl,
+                    bankroll_before=state.bankroll,
+                    consecutive_wins=consecutive_wins,
+                    consecutive_losses=consecutive_losses,
                 )
 
                 if trade is None:
@@ -425,6 +520,10 @@ Examples:
                     pnl=session_pnl,
                 )
 
+            # Exit main loop if bankrupt during signal processing
+            if bankrupt:
+                break
+
             # === HEARTBEAT (every ~60s) ===
             if time.time() - last_stats_time >= 60:
                 # Calculate unrealized PnL for pending trades
@@ -433,7 +532,8 @@ Examples:
                 for trade in pending:
                     try:
                         if rate_limiter.allow_request():
-                            market = client.get_market(trade.timestamp)
+                            # use_cache=False for fresh prices during heartbeat
+                            market = client.get_market(trade.timestamp, use_cache=False)
                             if market:
                                 current_price = market.up_price if trade.direction == "up" else market.down_price
                                 exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
@@ -503,7 +603,11 @@ Examples:
 
     # Cleanup
     print()  # Blank line
-    log.status_line("═══ Shutdown ═══")
+    if bankrupt:
+        log.status_line("═══ SIMULATION TERMINATED ═══")
+    else:
+        log.status_line("═══ Shutdown ═══")
+
     if market_cache:
         market_cache.stop()
 
@@ -513,6 +617,11 @@ Examples:
     win_rate = (session_wins / total * 100) if total > 0 else 0
     log.status_line(f"Session: {session_wins}W/{session_losses}L ({win_rate:.0f}%) | PnL: ${session_pnl:+.2f}")
     log.status_line(f"Final bankroll: ${state.bankroll:.2f}")
+
+    # Exit with error code if bankrupt (like a real trading system would)
+    if bankrupt:
+        log.status_line("Exit code: 1 (insufficient funds)")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

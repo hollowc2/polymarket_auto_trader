@@ -85,9 +85,19 @@ class PolymarketClient:
         # Check cache first (for recently fetched markets)
         if use_cache and self._use_cache and timestamp in self._market_cache:
             cached = self._market_cache[timestamp]
-            # Only return cached if not resolved (prices may change)
-            if not cached.closed:
+            # Only return cached if:
+            # 1. Market is fully resolved (outcome known) - state is final
+            # 2. OR market is still well within its window (prices stable)
+            now = int(time.time())
+            market_end = timestamp + 300  # 5-min window ends 300s after start
+
+            if cached.closed and cached.outcome:
+                # Resolved markets are final - safe to cache forever
                 return cached
+            elif now < market_end:
+                # Market still in window - cache is reasonably fresh
+                return cached
+            # Otherwise, market may have closed/resolved - fetch fresh data
 
         slug = f"btc-updown-5m-{timestamp}"
         try:

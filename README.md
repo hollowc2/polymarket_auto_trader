@@ -51,6 +51,27 @@ uv run python copybot_v2.py --paper --no-websocket --wallets 0x1d00...
 | Order type | Market (FOK) for guaranteed fills |
 | Resilience | Circuit breaker + rate limiting |
 | Logging | Colorful structured logs |
+| Pattern data | 54 fields saved for analysis |
+
+## Realistic Paper Trading
+
+Paper trading simulates real trading conditions:
+
+| Feature | Description |
+|---------|-------------|
+| **Immediate bankruptcy** | Simulation ends when bankroll < min bet |
+| **Chronological settlement** | Markets settle in order (oldest first) |
+| **State persistence** | Pending trades survive bot restart |
+| **Real costs** | Fees, spread, slippage from live orderbook |
+| **Resolution timing** | Tracks actual Chainlink/UMA resolution delay |
+
+### Exit Conditions
+
+| Condition | Exit Code | Message |
+|-----------|-----------|---------|
+| Bankroll depleted | 1 | `SIMULATION ENDED - INSUFFICIENT FUNDS` |
+| Daily loss limit | 0 | `SIMULATION ENDED - DAILY LOSS LIMIT` |
+| Ctrl+C | 0 | `Shutdown` |
 
 ## Configuration
 
@@ -132,13 +153,49 @@ Paper trading simulates real costs from Polymarket CLOB API:
 | **Slippage** | Orderbook walking | Depends on size |
 | **Copy Delay** | Time since trader's entry | ~0.3%/second |
 
-## Trade History
+## Trade History & Analysis
 
 ```bash
 uv run python history.py --stats      # View statistics
 uv run python history.py --limit 50   # Last 50 trades
 uv run python history.py --all        # All trades
 uv run python history.py --export csv # Export to CSV
+```
+
+### Pattern Analysis Data
+
+All trades saved to `trade_history_full.json` with 54 fields:
+
+| Category | Fields | Use Case |
+|----------|--------|----------|
+| **Time Patterns** | `hour_utc`, `day_of_week`, `minute_of_hour`, `seconds_into_window` | Find best times to trade |
+| **Session Tracking** | `session_trade_number`, `session_wins_before`, `bankroll_before` | Track performance decay |
+| **Streaks** | `consecutive_wins`, `consecutive_losses` | Mean reversion patterns |
+| **Market Context** | `market_bias`, `price_ratio`, `opposite_price` | Entry quality analysis |
+| **Execution** | `spread`, `slippage_pct`, `delay_impact_pct`, `copy_delay_ms` | Cost analysis |
+| **Resolution** | `resolution_delay_seconds`, `price_at_close`, `final_price` | Market timing |
+
+**Example analysis:**
+
+```python
+import json
+with open("trade_history_full.json") as f:
+    trades = json.load(f)
+
+# Win rate by hour
+from collections import defaultdict
+hourly = defaultdict(lambda: {"wins": 0, "total": 0})
+for t in trades:
+    if t["won"] is not None:
+        hourly[t["hour_utc"]]["total"] += 1
+        if t["won"]:
+            hourly[t["hour_utc"]]["wins"] += 1
+
+# Win rate after consecutive losses (mean reversion)
+after_losses = [t for t in trades if t["consecutive_losses"] >= 2 and t["won"] is not None]
+if after_losses:
+    win_rate = sum(1 for t in after_losses if t["won"]) / len(after_losses)
+    print(f"Win rate after 2+ losses: {win_rate:.1%}")
 ```
 
 ## Copytrade Edge Cases
@@ -161,6 +218,18 @@ uv run python history.py --export csv # Export to CSV
 | **Copy delay** | By the time we detect → fetch → execute, price may move 1-5%. v2 reduces this to 1.5-2s. | Worse entry than trader |
 | **Multiple wallets same market** | Each wallet has separate key. If two tracked wallets buy same market, we copy both. | Double exposure |
 | **API latency** | Activity API may lag 1-10 seconds behind actual trades. | Inherent delay |
+
+## Market Resolution Timing
+
+BTC 5-min markets resolve ~30-90 seconds after the window closes:
+
+```
+12:15:00  Window opens (market timestamp)
+12:20:00  Window closes
+12:20:39  Market resolved (Chainlink + UMA oracle)
+```
+
+The bot polls every 1.5s and settles trades within seconds of resolution.
 
 ## Architecture
 
