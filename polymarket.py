@@ -1,14 +1,95 @@
 """Polymarket API client for reading market data and placing trades."""
 
 import json
+import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from config import Config
+
+
+@dataclass
+class DelayImpactModel:
+    """Non-linear, liquidity-aware model for copy delay price impact.
+
+    Calculates the expected price impact from copying a trade with delay.
+    Uses: impact = sqrt(delay) * base_coef * liquidity_factor * volatility_factor
+    """
+
+    base_coef: float = field(default_factory=lambda: Config.DELAY_MODEL_BASE_COEF)
+    max_impact: float = field(default_factory=lambda: Config.DELAY_MODEL_MAX_IMPACT)
+    baseline_spread: float = field(default_factory=lambda: Config.DELAY_MODEL_BASELINE_SPREAD)
+
+    def calculate_impact(
+        self,
+        delay_ms: int,
+        order_size: float = 0.0,
+        depth_at_best: float = 0.0,
+        spread: float = 0.0,
+        side: str = "BUY",
+    ) -> tuple[float, dict]:
+        """Calculate delay impact percentage.
+
+        Args:
+            delay_ms: Milliseconds since the original trade
+            order_size: Our order size in USD
+            depth_at_best: Available liquidity at best price level
+            spread: Current bid-ask spread
+            side: "BUY" or "SELL"
+
+        Returns:
+            Tuple of (impact_pct, breakdown_dict)
+            - impact_pct: Expected price impact as percentage (e.g., 1.5 = 1.5%)
+            - breakdown_dict: Detailed calculation breakdown for logging
+        """
+        if delay_ms <= 0:
+            return 0.0, {"delay_ms": 0, "impact_pct": 0.0}
+
+        delay_seconds = delay_ms / 1000.0
+
+        # Base impact: sqrt decay - faster initial impact, slower growth over time
+        # sqrt(1s) * 0.8 = 0.8%, sqrt(4s) * 0.8 = 1.6%, sqrt(9s) * 0.8 = 2.4%
+        base_impact = math.sqrt(delay_seconds) * self.base_coef
+
+        # Liquidity factor: larger orders relative to available depth = more impact
+        # If depth_at_best is 0 or unknown, assume neutral factor of 1.0
+        if depth_at_best > 0 and order_size > 0:
+            # Ratio of order to 50% of available depth
+            # > 1.0 means we're taking more than half the best level
+            liq_ratio = order_size / (depth_at_best * 0.5)
+            liq_factor = min(2.0, max(0.5, liq_ratio))
+        else:
+            liq_factor = 1.0
+
+        # Volatility factor: wider spread = more volatile = more impact
+        # Baseline spread of 2% (0.02) = neutral factor of 1.0
+        if spread > 0 and self.baseline_spread > 0:
+            vol_ratio = spread / self.baseline_spread
+            vol_factor = min(2.0, max(0.5, vol_ratio))
+        else:
+            vol_factor = 1.0
+
+        # Final impact
+        final_impact = base_impact * liq_factor * vol_factor
+        final_impact = min(self.max_impact, final_impact)
+
+        breakdown = {
+            "delay_ms": delay_ms,
+            "delay_seconds": round(delay_seconds, 2),
+            "base_impact": round(base_impact, 4),
+            "liquidity_factor": round(liq_factor, 2),
+            "volatility_factor": round(vol_factor, 2),
+            "final_impact_pct": round(final_impact, 4),
+            "order_size": round(order_size, 2),
+            "depth_at_best": round(depth_at_best, 2),
+            "spread": round(spread, 4),
+        }
+
+        return final_impact, breakdown
 
 
 @dataclass
@@ -378,7 +459,7 @@ class PolymarketClient:
 
     def get_execution_price(
         self, token_id: str, side: str, amount_usd: float, copy_delay_ms: int = 0
-    ) -> tuple[float, float, float, float, float]:
+    ) -> tuple[float, float, float, float, float, dict | None]:
         """Calculate execution price with slippage for a given order size.
 
         Args:
@@ -388,23 +469,24 @@ class PolymarketClient:
             copy_delay_ms: Milliseconds since the original trade (for copytrade)
 
         Returns:
-            tuple of (execution_price, spread, slippage_pct, fill_pct, delay_impact_pct)
+            tuple of (execution_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown)
             - execution_price: The price you'll actually get
             - spread: Bid-ask spread
             - slippage_pct: Slippage from walking the book
             - fill_pct: Percentage of order that can be filled (100 = full fill)
             - delay_impact_pct: Additional price impact from copy delay
+            - delay_breakdown: Detailed breakdown of delay model calculation (or None)
         """
         book = self.get_orderbook(token_id)
         if not book:
-            return (0.5, 0.0, 0.0, 100.0, 0.0)
+            return (0.5, 0.0, 0.0, 100.0, 0.0, None)
 
         # Get best bid/ask for spread calculation
         bids = book.get("bids", [])
         asks = book.get("asks", [])
 
         if not bids or not asks:
-            return (0.5, 0.0, 0.0, 100.0, 0.0)
+            return (0.5, 0.0, 0.0, 100.0, 0.0, None)
 
         # Sort: asks ascending (lowest first), bids descending (highest first)
         asks_sorted = sorted(asks, key=lambda x: float(x["price"]))
@@ -414,18 +496,21 @@ class PolymarketClient:
         best_bid = float(bids_sorted[0]["price"])
         spread = best_ask - best_bid
 
-        # Calculate execution price by walking the book
+        # Calculate depth at best price level
         if side == "BUY":
-            # Walk through asks (we're buying, so we take from asks)
+            # Depth at best ask
+            best_level = asks_sorted[0]
+            depth_at_best = float(best_level["price"]) * float(best_level["size"])
             levels = asks_sorted
         else:
-            # Walk through bids (we're selling, so we take from bids)
+            # Depth at best bid
+            best_level = bids_sorted[0]
+            depth_at_best = float(best_level["price"]) * float(best_level["size"])
             levels = bids_sorted
 
         remaining_usd = amount_usd
         total_shares = 0.0
         total_cost = 0.0
-        total_available = sum(float(l["price"]) * float(l["size"]) for l in levels)
 
         for level in levels:
             price = float(level["price"])
@@ -453,7 +538,7 @@ class PolymarketClient:
 
         if total_shares == 0:
             midpoint = (best_ask + best_bid) / 2
-            return (midpoint, spread, 0.0, 0.0, 0.0)
+            return (midpoint, spread, 0.0, 0.0, 0.0, None)
 
         execution_price = total_cost / total_shares
 
@@ -463,15 +548,19 @@ class PolymarketClient:
         else:
             slippage_pct = (best_bid - execution_price) / best_bid * 100 if best_bid > 0 else 0
 
-        # Calculate copy delay price impact
-        # The longer the delay, the more the price moves against us
-        # Empirical model: ~0.5% price impact per second of delay for popular trades
+        # Calculate copy delay price impact using the improved model
         delay_impact_pct = 0.0
+        delay_breakdown = None
+
         if copy_delay_ms > 0:
-            delay_seconds = copy_delay_ms / 1000.0
-            # Price impact increases with delay (diminishing returns after ~10s)
-            # Model: 0.3% per second, capped at 5%
-            delay_impact_pct = min(5.0, delay_seconds * 0.3)
+            delay_model = DelayImpactModel()
+            delay_impact_pct, delay_breakdown = delay_model.calculate_impact(
+                delay_ms=copy_delay_ms,
+                order_size=amount_usd,
+                depth_at_best=depth_at_best,
+                spread=spread,
+                side=side,
+            )
 
             # Apply delay impact to execution price
             if side == "BUY":
@@ -482,4 +571,4 @@ class PolymarketClient:
             # Cap execution price at reasonable bounds
             execution_price = max(0.01, min(0.99, execution_price))
 
-        return (execution_price, spread, max(0, slippage_pct), fill_pct, delay_impact_pct)
+        return (execution_price, spread, max(0, slippage_pct), fill_pct, delay_impact_pct, delay_breakdown)

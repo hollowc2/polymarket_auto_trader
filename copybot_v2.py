@@ -14,6 +14,8 @@ Enhanced version with:
 """
 
 import argparse
+import queue
+import re
 import signal
 import sys
 import time
@@ -24,9 +26,12 @@ from copytrade import CopySignal
 from copytrade_ws import HybridCopytradeMonitor
 from logging_config import get_logger, StructuredLogger
 from polymarket import PolymarketClient
-from polymarket_ws import MarketDataCache
+from polymarket_ws import MarketDataCache, TradeEvent
 from resilience import CircuitBreaker, RateLimiter, HealthCheck, CircuitOpenError, categorize_error, ErrorCategory
 from trader import LiveTrader, PaperTrader, TradingState
+
+# Pattern for BTC 5-min markets
+BTC_5M_PATTERN = re.compile(r"^btc-updown-5m-(\d+)$")
 
 running = True
 log = get_logger("copybot")
@@ -197,10 +202,34 @@ Examples:
     # Fast hybrid monitor (REST polling for activity)
     monitor = HybridCopytradeMonitor(wallets, poll_interval=poll_interval)
 
+    # Signal queue for thread-safe delivery from WebSocket callbacks
+    signal_queue: queue.Queue[CopySignal] = queue.Queue()
+
+    # Wire up WebSocket trade callback for immediate polling
+    if market_cache:
+        def on_btc_trade(trade: TradeEvent):
+            """Callback when WebSocket detects a trade on BTC 5-min market."""
+            # Check if this is a BTC 5-min market
+            if trade.market_id and BTC_5M_PATTERN.match(trade.market_id):
+                # Trigger immediate poll to detect the trade details
+                signals = monitor.trigger_immediate_poll(trade.market_id)
+                for sig in signals:
+                    signal_queue.put(sig)
+                    log.debug("ws_triggered_signal",
+                        market=trade.market_id,
+                        trader=sig.trader_name,
+                        direction=sig.direction,
+                        latency_ms=int((time.time() - trade.timestamp) * 1000) if trade.timestamp else 0,
+                    )
+
+        market_cache.on_trade(on_btc_trade)
+        log.debug("websocket_callback_registered")
+
     # Register monitor health check
     health.register("monitor", lambda: {
         "healthy": True,
         "polls": monitor.polls,
+        "triggered_polls": monitor._triggered_polls,
         "avg_latency_ms": monitor.avg_poll_latency_ms,
     })
 
@@ -371,6 +400,22 @@ Examples:
             # === POLL FOR NEW SIGNALS (Fast polling) ===
             signals = monitor.poll()
             polls_since_stats += 1
+
+            # === CHECK FOR WEBSOCKET-TRIGGERED SIGNALS ===
+            # These are signals found by immediate polls triggered by WebSocket events
+            while True:
+                try:
+                    ws_signal = signal_queue.get_nowait()
+                    # Avoid duplicates - check if already in signals
+                    is_duplicate = any(
+                        s.wallet == ws_signal.wallet and s.market_ts == ws_signal.market_ts
+                        for s in signals
+                    )
+                    if not is_duplicate:
+                        signals.append(ws_signal)
+                        log.debug("ws_signal_added", trader=ws_signal.trader_name, market_ts=ws_signal.market_ts)
+                except queue.Empty:
+                    break
 
             for sig in signals:
                 # Skip if already copied this market from this wallet

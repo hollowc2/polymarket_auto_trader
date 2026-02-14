@@ -363,12 +363,14 @@ class PolymarketWebSocket:
 
     def get_execution_price(
         self, token_id: str, side: str, amount_usd: float, copy_delay_ms: int = 0
-    ) -> tuple[float, float, float, float, float]:
+    ) -> tuple[float, float, float, float, float, dict | None]:
         """Get execution price from cached orderbook.
 
-        Returns: (exec_price, spread, slippage_pct, fill_pct, delay_impact_pct)
+        Returns: (exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown)
         Falls back to REST API if no cached data.
         """
+        from polymarket import DelayImpactModel
+
         book = self.get_orderbook(token_id)
 
         if book and book.timestamp > 0:
@@ -376,11 +378,25 @@ class PolymarketWebSocket:
             exec_price, slippage_pct, fill_pct = book.get_execution_price(side, amount_usd)
             spread = book.best_ask - book.best_bid if book.best_ask > 0 and book.best_bid > 0 else 0
 
-            # Calculate delay impact
+            # Calculate depth at best level
+            if side == "BUY":
+                depth_at_best = book.asks[0].price * book.asks[0].size if book.asks else 0
+            else:
+                depth_at_best = book.bids[0].price * book.bids[0].size if book.bids else 0
+
+            # Calculate delay impact using the improved model
             delay_impact_pct = 0.0
+            delay_breakdown = None
+
             if copy_delay_ms > 0:
-                delay_seconds = copy_delay_ms / 1000.0
-                delay_impact_pct = min(5.0, delay_seconds * 0.3)
+                delay_model = DelayImpactModel()
+                delay_impact_pct, delay_breakdown = delay_model.calculate_impact(
+                    delay_ms=copy_delay_ms,
+                    order_size=amount_usd,
+                    depth_at_best=depth_at_best,
+                    spread=spread,
+                    side=side,
+                )
 
                 if side == "BUY":
                     exec_price *= (1 + delay_impact_pct / 100)
@@ -388,10 +404,10 @@ class PolymarketWebSocket:
                     exec_price *= (1 - delay_impact_pct / 100)
                 exec_price = max(0.01, min(0.99, exec_price))
 
-            return exec_price, spread, slippage_pct, fill_pct, delay_impact_pct
+            return exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown
 
         # No cached data
-        return 0.5, 0.0, 0.0, 100.0, 0.0
+        return 0.5, 0.0, 0.0, 100.0, 0.0, None
 
     def get_mid(self, token_id: str) -> float | None:
         """Get midpoint price from cached orderbook."""
@@ -796,10 +812,10 @@ class MarketDataCache:
 
     def get_execution_price(
         self, token_id: str, side: str, amount_usd: float, copy_delay_ms: int = 0
-    ) -> tuple[float, float, float, float, float]:
+    ) -> tuple[float, float, float, float, float, dict | None]:
         """Get execution price - from WebSocket cache or REST fallback.
 
-        Returns: (exec_price, spread, slippage_pct, fill_pct, delay_impact_pct)
+        Returns: (exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown)
         """
         # Try WebSocket cache first
         if self._ws and self._ws.is_connected():

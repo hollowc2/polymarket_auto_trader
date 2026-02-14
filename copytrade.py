@@ -24,6 +24,12 @@ class CopySignal:
     tx_hash: str
     trader_name: str
 
+    # On-chain data (optional, fetched from Polygonscan)
+    block_number: int | None = None
+    gas_used: int | None = None
+    tx_fee_matic: float | None = None
+    on_chain_timestamp: int | None = None
+
 
 class CopytradeMonitor:
     """Monitor specific wallets for BTC 5-min trades."""

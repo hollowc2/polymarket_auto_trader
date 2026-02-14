@@ -14,6 +14,7 @@ from typing import Callable
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from blockchain import PolygonscanClient
 from config import Config
 from copytrade import CopySignal
 
@@ -237,7 +238,8 @@ class HybridCopytradeMonitor:
     This provides the best of both worlds:
     - WebSocket for instant orderbook data (for execution price calculation)
     - Fast REST polling (1-2s) for wallet activity detection
-    - Fallback to slower polling if needed
+    - WebSocket-triggered immediate polls for ultra-low latency
+    - On-chain data enrichment via Polygonscan
     """
 
     BTC_5M_PATTERN = re.compile(r"^btc-updown-5m-(\d+)$")
@@ -282,6 +284,15 @@ class HybridCopytradeMonitor:
         # Signal callbacks
         self._callbacks: list[Callable[[CopySignal], None]] = []
 
+        # WebSocket trigger state
+        self._lock = threading.Lock()
+        self._last_trigger_time = 0.0
+        self._trigger_cooldown = 0.3  # 300ms cooldown between triggered polls
+        self._triggered_polls = 0
+
+        # Polygonscan client for on-chain data enrichment
+        self._polygonscan = PolygonscanClient()
+
         # Stats
         self.polls = 0
         self.signals_emitted = 0
@@ -292,8 +303,34 @@ class HybridCopytradeMonitor:
         """Register a signal callback."""
         self._callbacks.append(callback)
 
-    def poll(self) -> list[CopySignal]:
+    def trigger_immediate_poll(self, market_slug: str | None = None) -> list[CopySignal]:
+        """Immediately poll when WebSocket detects market activity.
+
+        Called when a trade is detected on a BTC 5-min market via WebSocket.
+        Uses a cooldown to prevent excessive polling.
+
+        Args:
+            market_slug: Optional market slug that triggered this poll
+
+        Returns:
+            List of new signals found
+        """
+        with self._lock:
+            now = time.time()
+            # Check cooldown to avoid excessive polling
+            if now - self._last_trigger_time < self._trigger_cooldown:
+                return []
+            self._last_trigger_time = now
+            self._triggered_polls += 1
+
+        # Do the actual poll (this logs as a triggered poll)
+        return self.poll(triggered=True)
+
+    def poll(self, triggered: bool = False) -> list[CopySignal]:
         """Poll all wallets for new BTC 5-min trades.
+
+        Args:
+            triggered: True if this poll was triggered by WebSocket activity
 
         Returns list of new signals since last poll.
         """
@@ -301,7 +338,7 @@ class HybridCopytradeMonitor:
         self.polls += 1
 
         for wallet in self.wallets:
-            wallet_signals = self._poll_wallet(wallet)
+            wallet_signals = self._poll_wallet(wallet, triggered=triggered)
             signals.extend(wallet_signals)
 
         for signal in signals:
@@ -314,8 +351,13 @@ class HybridCopytradeMonitor:
 
         return signals
 
-    def _poll_wallet(self, wallet: str) -> list[CopySignal]:
-        """Poll a single wallet for new trades."""
+    def _poll_wallet(self, wallet: str, triggered: bool = False) -> list[CopySignal]:
+        """Poll a single wallet for new trades.
+
+        Args:
+            wallet: Wallet address to poll
+            triggered: True if this poll was triggered by WebSocket activity
+        """
         start = time.time()
 
         try:
@@ -380,6 +422,20 @@ class HybridCopytradeMonitor:
                 tx_hash=tx_hash,
                 trader_name=trade.get("pseudonym", trade.get("name", "")[:15]),
             )
+
+            # Enrich with on-chain data if available
+            if tx_hash and self._polygonscan.is_available():
+                try:
+                    on_chain = self._polygonscan.get_transaction(tx_hash)
+                    if on_chain:
+                        signal.block_number = on_chain.block_number
+                        signal.gas_used = on_chain.gas_used
+                        signal.tx_fee_matic = on_chain.tx_fee_matic
+                        signal.on_chain_timestamp = on_chain.timestamp
+                except Exception as e:
+                    # Don't fail signal on Polygonscan errors
+                    pass
+
             signals.append(signal)
             new_last_ts = max(new_last_ts, trade_ts)
 
@@ -446,7 +502,9 @@ class HybridCopytradeMonitor:
             "wallets": len(self.wallets),
             "poll_interval": self.poll_interval,
             "polls": self.polls,
+            "triggered_polls": self._triggered_polls,
             "signals_emitted": self.signals_emitted,
             "avg_poll_latency_ms": round(self.avg_poll_latency_ms, 1),
             "seen_trades": len(self._seen_trades),
+            "polygonscan_available": self._polygonscan.is_available(),
         }
