@@ -66,3 +66,15 @@ class Config:
     # REST client settings
     REST_TIMEOUT: float = float(os.getenv("REST_TIMEOUT", "3"))  # Faster timeout
     REST_RETRIES: int = int(os.getenv("REST_RETRIES", "2"))
+
+    # Trading client settings
+    SIGNATURE_TYPE: int = int(os.getenv("SIGNATURE_TYPE", "0"))  # 0=EOA/MetaMask, 1=Magic/proxy
+    FUNDER_ADDRESS: str = os.getenv("FUNDER_ADDRESS", "")  # Required for proxy wallets
+
+    # Resilience settings
+    CIRCUIT_BREAKER_THRESHOLD: int = int(os.getenv("CIRCUIT_BREAKER_THRESHOLD", "5"))
+    CIRCUIT_BREAKER_RECOVERY_TIME: int = int(os.getenv("CIRCUIT_BREAKER_RECOVERY_TIME", "60"))
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
+
+    # Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

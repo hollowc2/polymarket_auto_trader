@@ -417,6 +417,264 @@ class PolymarketWebSocket:
         }
 
 
+class UserWebSocket:
+    """Authenticated WebSocket client for real-time order status updates.
+
+    Provides real-time notifications for:
+    - MATCHED: Order filled
+    - MINED: Transaction submitted to chain
+    - CONFIRMED: Transaction confirmed
+    - FAILED: Order failed
+    - RETRYING: Order being retried
+
+    Requires API credentials from py-clob-client.
+    """
+
+    USER_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
+
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        api_passphrase: str,
+        on_order_update: Callable[[dict], None] | None = None,
+    ):
+        """Initialize authenticated User WebSocket.
+
+        Args:
+            api_key: API key from py-clob-client credentials
+            api_secret: API secret
+            api_passphrase: API passphrase
+            on_order_update: Callback for order status updates
+        """
+        self._api_key = api_key
+        self._api_secret = api_secret
+        self._api_passphrase = api_passphrase
+        self._on_order_update = on_order_update
+
+        self._ws = None
+        self._running = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._connected = asyncio.Event()
+        self._authenticated = asyncio.Event()
+        self._lock = threading.Lock()
+
+        # Track pending orders for status updates
+        self._pending_orders: dict[str, dict] = {}  # order_id -> order info
+
+        # Statistics
+        self.reconnect_count = 0
+        self.last_message_time = 0.0
+        self.messages_received = 0
+        self.orders_tracked = 0
+
+    def start(self):
+        """Start WebSocket connection in background thread."""
+        if self._running:
+            return
+
+        self._running = True
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+        # Wait for authentication (with timeout)
+        timeout = 10.0
+        start = time.time()
+        while not self._authenticated.is_set() and time.time() - start < timeout:
+            time.sleep(0.1)
+
+        if not self._authenticated.is_set():
+            print("[user-ws] Warning: Authentication timeout")
+
+    def stop(self):
+        """Stop WebSocket connection."""
+        self._running = False
+        if self._loop:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+    def _run_loop(self):
+        """Run asyncio event loop in background thread."""
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_until_complete(self._connect_loop())
+        except Exception as e:
+            print(f"[user-ws] Event loop error: {e}")
+        finally:
+            self._loop.close()
+
+    async def _connect_loop(self):
+        """Main connection loop with reconnection logic."""
+        while self._running:
+            try:
+                async with websockets.connect(
+                    self.USER_WS_URL,
+                    ping_interval=30,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
+                    self._ws = ws
+                    self._connected.set()
+                    print(f"[user-ws] Connected to {self.USER_WS_URL}")
+
+                    # Authenticate
+                    await self._authenticate()
+
+                    # Message handling loop
+                    async for message in ws:
+                        self.last_message_time = time.time()
+                        self.messages_received += 1
+                        await self._handle_message(message)
+
+            except ConnectionClosed as e:
+                print(f"[user-ws] Connection closed: {e}")
+                self._connected.clear()
+                self._authenticated.clear()
+            except Exception as e:
+                print(f"[user-ws] Connection error: {e}")
+                self._connected.clear()
+                self._authenticated.clear()
+
+            if self._running:
+                self.reconnect_count += 1
+                wait_time = min(30, 2 ** min(self.reconnect_count, 5))
+                print(f"[user-ws] Reconnecting in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+
+    async def _authenticate(self):
+        """Send authentication message."""
+        if not self._ws:
+            return
+
+        # Generate timestamp for signature
+        timestamp = int(time.time())
+
+        # Create authentication message
+        auth_msg = {
+            "type": "subscribe",
+            "channel": "user",
+            "auth": {
+                "apiKey": self._api_key,
+                "secret": self._api_secret,
+                "passphrase": self._api_passphrase,
+            },
+            "markets": [],  # Subscribe to all markets for our orders
+        }
+
+        await self._ws.send(json.dumps(auth_msg))
+        print("[user-ws] Authentication message sent")
+
+    async def _handle_message(self, raw: str):
+        """Handle incoming WebSocket message."""
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return
+
+        msg_type = data.get("type", data.get("event_type", ""))
+
+        # Handle authentication response
+        if msg_type == "subscribed" or msg_type == "authenticated":
+            self._authenticated.set()
+            print("[user-ws] Authenticated successfully")
+            return
+
+        if msg_type == "error":
+            error = data.get("message", data.get("error", "Unknown error"))
+            print(f"[user-ws] Error: {error}")
+            return
+
+        # Handle order status updates
+        if msg_type in ("order", "trade", "order_update"):
+            await self._handle_order_update(data)
+
+    async def _handle_order_update(self, data: dict):
+        """Handle order status update."""
+        order_id = data.get("order_id", data.get("orderId", data.get("id", "")))
+        status = data.get("status", data.get("order_status", ""))
+        event = data.get("event", data.get("event_type", ""))
+
+        update = {
+            "order_id": order_id,
+            "status": status,
+            "event": event,
+            "timestamp": time.time(),
+            "data": data,
+        }
+
+        # Map events to statuses
+        if event == "MATCHED" or status == "MATCHED":
+            update["status"] = "filled"
+        elif event == "MINED" or status == "MINED":
+            update["status"] = "mined"
+        elif event == "CONFIRMED" or status == "CONFIRMED":
+            update["status"] = "confirmed"
+        elif event == "FAILED" or status == "FAILED":
+            update["status"] = "failed"
+        elif event == "RETRYING" or status == "RETRYING":
+            update["status"] = "retrying"
+        elif event == "CANCELED" or status == "CANCELED":
+            update["status"] = "cancelled"
+
+        # Update pending order if tracked
+        with self._lock:
+            if order_id in self._pending_orders:
+                self._pending_orders[order_id].update(update)
+
+        # Call callback
+        if self._on_order_update:
+            try:
+                self._on_order_update(update)
+            except Exception as e:
+                print(f"[user-ws] Callback error: {e}")
+
+    def track_order(self, order_id: str, order_info: dict | None = None):
+        """Start tracking an order for status updates.
+
+        Args:
+            order_id: Order ID to track
+            order_info: Optional additional order info
+        """
+        with self._lock:
+            self._pending_orders[order_id] = {
+                "order_id": order_id,
+                "status": "pending",
+                "tracked_at": time.time(),
+                **(order_info or {}),
+            }
+            self.orders_tracked += 1
+
+    def get_order_status(self, order_id: str) -> dict | None:
+        """Get current status of a tracked order."""
+        with self._lock:
+            return self._pending_orders.get(order_id)
+
+    def untrack_order(self, order_id: str):
+        """Stop tracking an order."""
+        with self._lock:
+            self._pending_orders.pop(order_id, None)
+
+    def is_connected(self) -> bool:
+        """Check if WebSocket is connected and authenticated."""
+        return self._connected.is_set() and self._authenticated.is_set()
+
+    @property
+    def stats(self) -> dict:
+        """Get connection statistics."""
+        return {
+            "connected": self._connected.is_set(),
+            "authenticated": self._authenticated.is_set(),
+            "reconnect_count": self.reconnect_count,
+            "messages_received": self.messages_received,
+            "orders_tracked": self.orders_tracked,
+            "pending_orders": len(self._pending_orders),
+            "last_message_age": time.time() - self.last_message_time if self.last_message_time else None,
+        }
+
+
 class MarketDataCache:
     """High-level cache for BTC 5-min market data.
 

@@ -72,6 +72,9 @@ class Trade:
     best_bid: float = 0.0  # best bid price at execution
     best_ask: float = 0.0  # best ask price at execution
 
+    # === ORDER STATUS (live trading) ===
+    order_status: str = "pending"  # pending, submitted, filled, cancelled, failed
+
     # === UNREALIZED P&L (for pending trades) ===
     current_price: float | None = None  # current market price for our direction
     unrealized_pnl: float | None = None  # estimated PnL based on current price
@@ -837,33 +840,150 @@ class PaperTrader:
 
 
 class LiveTrader:
-    """Live trading via Polymarket CLOB API."""
+    """Live trading via Polymarket CLOB API.
 
-    def __init__(self):
+    Supports:
+    - EOA/MetaMask wallets (signature_type=0, default)
+    - Magic/proxy wallets (signature_type=1, requires funder address)
+    - FOK (Fill-Or-Kill) market orders for immediate execution
+    - Order status tracking and confirmation
+    """
+
+    # Minimum order size in USD
+    MIN_ORDER_SIZE = 1.0
+
+    def __init__(self, market_cache=None):
+        """Initialize live trader.
+
+        Args:
+            market_cache: Optional MarketDataCache for faster orderbook lookups
+        """
         if not Config.PRIVATE_KEY:
             raise ValueError("PRIVATE_KEY not set in .env")
+
+        # Validate proxy wallet config
+        if Config.SIGNATURE_TYPE == 1 and not Config.FUNDER_ADDRESS:
+            raise ValueError("FUNDER_ADDRESS required for proxy wallet (SIGNATURE_TYPE=1)")
+
+        self._market_cache = market_cache
         self._init_client()
 
     def _init_client(self):
         """Initialize py-clob-client with wallet credentials."""
         try:
             from py_clob_client.client import ClobClient
-            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.clob_types import MarketOrderArgs, OrderArgs, OrderType
+            from py_clob_client.order_builder.constants import BUY, SELL
 
-            self.client = ClobClient(
-                Config.CLOB_API,
-                key=Config.PRIVATE_KEY,
-                chain_id=Config.CHAIN_ID,
-            )
+            # Build client kwargs based on wallet type
+            client_kwargs = {
+                "host": Config.CLOB_API,
+                "key": Config.PRIVATE_KEY,
+                "chain_id": Config.CHAIN_ID,
+            }
+
+            # Add proxy wallet parameters if using Magic/proxy wallet
+            if Config.SIGNATURE_TYPE == 1:
+                client_kwargs["signature_type"] = 1
+                client_kwargs["funder"] = Config.FUNDER_ADDRESS
+                print(f"[trader] Using proxy wallet with funder: {Config.FUNDER_ADDRESS[:10]}...")
+
+            self.client = ClobClient(**client_kwargs)
+
             # Derive API credentials
-            self.client.set_api_creds(self.client.create_or_derive_api_creds())
+            creds = self.client.create_or_derive_api_creds()
+            self.client.set_api_creds(creds)
+
+            # Store order types and constants
+            self.MarketOrderArgs = MarketOrderArgs
             self.OrderArgs = OrderArgs
             self.OrderType = OrderType
-            print("[trader] ✅ Live trading client initialized")
+            self.BUY = BUY
+            self.SELL = SELL
+
+            wallet_type = "proxy" if Config.SIGNATURE_TYPE == 1 else "EOA"
+            print(f"[trader] Live trading client initialized ({wallet_type} wallet)")
+
         except ImportError:
             raise ImportError("py-clob-client not installed. Run: pip install py-clob-client")
         except Exception as e:
             raise RuntimeError(f"Failed to init trading client: {e}")
+
+    def _validate_order(self, market: Market, direction: str, amount: float) -> tuple[bool, str]:
+        """Validate order parameters before submission.
+
+        Returns:
+            (is_valid, error_message)
+        """
+        # Check minimum order size
+        if amount < self.MIN_ORDER_SIZE:
+            return False, f"Order size ${amount:.2f} below minimum ${self.MIN_ORDER_SIZE:.2f}"
+
+        # Check token ID exists
+        token_id = market.up_token_id if direction == "up" else market.down_token_id
+        if not token_id:
+            return False, f"No token ID for {direction} side"
+
+        # Check market is accepting orders
+        if not market.accepting_orders:
+            return False, f"Market {market.slug} not accepting orders"
+
+        # Check market is not closed
+        if market.closed:
+            return False, f"Market {market.slug} is closed"
+
+        return True, ""
+
+    def _get_order_status(self, order_id: str, max_attempts: int = 5, poll_interval: float = 0.5) -> dict:
+        """Poll for order status until filled or timeout.
+
+        Args:
+            order_id: Order ID to check
+            max_attempts: Maximum polling attempts
+            poll_interval: Seconds between polls
+
+        Returns:
+            Order status dict with keys: status, filled_size, avg_price, etc.
+        """
+        for attempt in range(max_attempts):
+            try:
+                order = self.client.get_order(order_id)
+                status = order.get("status", "unknown")
+
+                # FOK orders should be immediately filled or cancelled
+                if status in ("FILLED", "MATCHED"):
+                    return {
+                        "status": "filled",
+                        "filled_size": float(order.get("size_matched", order.get("size", 0))),
+                        "avg_price": float(order.get("price", 0)),
+                        "order": order,
+                    }
+                elif status in ("CANCELED", "CANCELLED", "EXPIRED"):
+                    return {
+                        "status": "cancelled",
+                        "filled_size": 0,
+                        "avg_price": 0,
+                        "order": order,
+                    }
+                elif status == "LIVE":
+                    # FOK should not rest on book, but check anyway
+                    time.sleep(poll_interval)
+                    continue
+                else:
+                    # Unknown status, keep polling
+                    time.sleep(poll_interval)
+
+            except Exception as e:
+                print(f"[trader] Error polling order {order_id}: {e}")
+                time.sleep(poll_interval)
+
+        # Timeout - return unknown status
+        return {
+            "status": "unknown",
+            "filled_size": 0,
+            "avg_price": 0,
+            "order": None,
+        }
 
     def place_bet(
         self,
@@ -873,52 +993,98 @@ class LiveTrader:
         confidence: float,
         streak_length: int,
         **kwargs,  # copytrade fields
-    ) -> Trade:
-        token_id = market.up_token_id if direction == "up" else market.down_token_id
-        if not token_id:
-            raise ValueError(f"No token ID for {direction} side")
+    ) -> Trade | None:
+        """Place a live bet using FOK (Fill-Or-Kill) market order.
 
+        FOK orders fill immediately at the best available price or are cancelled.
+        This is ideal for copy trading where speed matters.
+
+        Returns None if order is rejected (validation failed, market closed, etc.)
+        """
+        # Validate order parameters
+        is_valid, error_msg = self._validate_order(market, direction, amount)
+        if not is_valid:
+            print(f"[LIVE] Order rejected: {error_msg}")
+            return None
+
+        token_id = market.up_token_id if direction == "up" else market.down_token_id
         entry_price = market.up_price if direction == "up" else market.down_price
         if entry_price <= 0:
             entry_price = 0.5
 
         executed_at = int(time.time() * 1000)  # milliseconds
+        order_id = None
+        order_status = "pending"
+        execution_price = entry_price
+        filled_amount = amount
 
-        # Calculate size (number of shares)
-        size = round(amount / entry_price, 2)
+        # Get fee rate from market
+        fee_rate_bps = market.taker_fee_bps if hasattr(market, 'taker_fee_bps') else 1000
+        from polymarket import PolymarketClient
+        fee_pct = PolymarketClient.calculate_fee(entry_price, fee_rate_bps)
 
         try:
-            order = self.client.create_and_post_order(
-                self.OrderArgs(
-                    token_id=token_id,
-                    price=entry_price,
-                    size=size,
-                    side="BUY",
-                )
+            # Create FOK market order
+            # For BUY orders, amount is in USD (how much to spend)
+            market_order = self.MarketOrderArgs(
+                token_id=token_id,
+                amount=amount,  # USD amount to spend
+                side=self.BUY,
+                order_type=self.OrderType.FOK,  # Fill-Or-Kill for immediate execution
             )
-            order_id = order.get("orderID", order.get("id", "unknown"))
+
+            # Sign and submit the order
+            signed_order = self.client.create_market_order(market_order)
+            response = self.client.post_order(signed_order, self.OrderType.FOK)
+
+            order_id = response.get("orderID", response.get("id", "unknown"))
+            order_status = "submitted"
 
             # Log based on strategy type
             if kwargs.get("strategy") == "copytrade":
                 trader = kwargs.get("trader_name", "unknown")
                 print(
                     f"[LIVE] Copied {trader}: ${amount:.2f} on {direction.upper()} @ {entry_price:.2f} "
-                    f"| order={order_id}"
+                    f"| order={order_id} (FOK)"
                 )
             else:
                 print(
                     f"[LIVE] Bet ${amount:.2f} on {direction.upper()} @ {entry_price:.2f} "
-                    f"| {market.title} | order={order_id}"
+                    f"| {market.title} | order={order_id} (FOK)"
                 )
+
+            # Poll for order status (FOK should resolve quickly)
+            if order_id and not order_id.startswith("FAILED"):
+                status_result = self._get_order_status(order_id)
+                order_status = status_result["status"]
+
+                if order_status == "filled":
+                    filled_amount = status_result["filled_size"] * status_result["avg_price"]
+                    execution_price = status_result["avg_price"]
+                    print(f"[LIVE] Order filled: {status_result['filled_size']:.2f} shares @ {execution_price:.3f}")
+                elif order_status == "cancelled":
+                    print(f"[LIVE] Order cancelled (FOK not filled)")
+                    return None
+                else:
+                    print(f"[LIVE] Order status: {order_status}")
+
         except Exception as e:
             print(f"[LIVE] Order failed: {e}")
             order_id = f"FAILED:{e}"
+            order_status = "failed"
+
+            # Categorize the error
+            from resilience import categorize_error, ErrorCategory
+            category = categorize_error(e)
+            if category == ErrorCategory.FATAL:
+                print(f"[LIVE] Fatal error (not retryable): {e}")
+                return None
 
         return Trade(
             timestamp=market.timestamp,
             market_slug=market.slug,
             direction=direction,
-            amount=amount,
+            amount=filled_amount,
             entry_price=entry_price,
             streak_length=streak_length,
             confidence=confidence,
@@ -926,5 +1092,12 @@ class LiveTrader:
             order_id=order_id,
             executed_at=executed_at,
             market_price_at_copy=entry_price,
+            # Realistic execution fields
+            fee_rate_bps=fee_rate_bps,
+            fee_pct=fee_pct,
+            execution_price=execution_price,
+            requested_amount=amount,
+            price_at_signal=entry_price,
+            price_at_execution=execution_price,
             **kwargs,  # pass copytrade fields
         )
