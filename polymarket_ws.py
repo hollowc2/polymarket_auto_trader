@@ -202,12 +202,16 @@ class PolymarketWebSocket:
         self._running = False
 
         if self._loop and self._loop.is_running():
-            # Schedule graceful shutdown
-            asyncio.run_coroutine_threadsafe(self._graceful_shutdown(), self._loop)
-            # Give it time to close cleanly
-            time.sleep(0.5)
-            # Now stop the loop
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            try:
+                # Schedule graceful shutdown
+                asyncio.run_coroutine_threadsafe(self._graceful_shutdown(), self._loop)
+                # Give it time to close cleanly
+                time.sleep(0.5)
+                # Now stop the loop
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except RuntimeError:
+                # Event loop already closed, ignore
+                pass
 
         if self._thread:
             self._thread.join(timeout=2.0)
@@ -544,8 +548,12 @@ class UserWebSocket:
     def stop(self):
         """Stop WebSocket connection."""
         self._running = False
-        if self._loop:
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop and self._loop.is_running():
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except RuntimeError:
+                # Event loop already closed, ignore
+                pass
         if self._thread:
             self._thread.join(timeout=2.0)
 

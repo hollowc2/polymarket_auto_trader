@@ -382,6 +382,7 @@ Examples:
                     log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
                     log.status_line("╚════════════════════════════════════════╝")
                     log.status_line(f"Bankroll ${state.bankroll:.2f} < Min bet ${Config.MIN_BET:.2f}")
+                    bankrupt = True
                     break
                 elif "Max daily loss" in reason:
                     log.status_line("")

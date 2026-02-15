@@ -471,8 +471,8 @@ class TradingState:
             return False, f"Max daily bets reached ({Config.MAX_DAILY_BETS})"
         if self.daily_pnl <= -Config.MAX_DAILY_LOSS:
             return False, f"Max daily loss reached (${Config.MAX_DAILY_LOSS})"
-        if self.bankroll < Config.BET_AMOUNT:
-            return False, f"Bankroll too low (${self.bankroll:.2f})"
+        if self.bankroll < Config.MIN_BET:
+            return False, f"Bankroll too low (${self.bankroll:.2f} < ${Config.MIN_BET:.2f})"
         return True, "OK"
 
     def record_trade(self, trade: Trade):
