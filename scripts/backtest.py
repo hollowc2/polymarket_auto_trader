@@ -3,10 +3,15 @@
 
 import argparse
 import json
-import sys
 
 
-def backtest(data_file: str, trigger: int, bet_amount: float, bankroll: float, fee_pct: float = 0.05):
+def backtest(
+    data_file: str,
+    trigger: int,
+    bet_amount: float,
+    bankroll: float,
+    fee_pct: float = 0.05,
+):
     with open(data_file) as f:
         markets = json.load(f)
 
@@ -14,7 +19,9 @@ def backtest(data_file: str, trigger: int, bet_amount: float, bankroll: float, f
     outcomes = [m["outcome"] for m in closed]
 
     print(f"=== BACKTEST: trigger={trigger}, bet=${bet_amount}, fee={fee_pct:.0%} ===")
-    print(f"Markets: {len(closed)}, Up: {sum(1 for o in outcomes if o == 'up')}, Down: {sum(1 for o in outcomes if o == 'down')}")
+    print(
+        f"Markets: {len(closed)}, Up: {sum(1 for o in outcomes if o == 'up')}, Down: {sum(1 for o in outcomes if o == 'down')}"
+    )
     print()
 
     trades = []
@@ -81,7 +88,7 @@ def backtest(data_file: str, trigger: int, bet_amount: float, bankroll: float, f
     # Streak breakdown
     print("=== STREAK LENGTH BREAKDOWN ===")
     for sl in range(trigger, min(trigger + 4, 8)):
-        sw = sl_wins = sl_total = 0
+        sl_wins = sl_total = 0
         for i in range(sl, len(outcomes)):
             window = outcomes[i - sl : i]
             # Must be exactly this streak length (not longer)
@@ -93,7 +100,9 @@ def backtest(data_file: str, trigger: int, bet_amount: float, bankroll: float, f
                 if outcomes[i] == bet_dir:
                     sl_wins += 1
         if sl_total:
-            print(f"  Exactly {sl}-streak: {sl_wins}/{sl_total} ({sl_wins / sl_total:.1%} reversal)")
+            print(
+                f"  Exactly {sl}-streak: {sl_wins}/{sl_total} ({sl_wins / sl_total:.1%} reversal)"
+            )
 
     # Print last 10 trades
     print()
@@ -108,11 +117,15 @@ def backtest(data_file: str, trigger: int, bet_amount: float, bankroll: float, f
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="../polymarket-research/data/polymarket_all_resolved.json")
+    parser.add_argument(
+        "--data", default="../polymarket-research/data/polymarket_all_resolved.json"
+    )
     parser.add_argument("--trigger", type=int, default=4)
     parser.add_argument("--amount", type=float, default=10)
     parser.add_argument("--bankroll", type=float, default=1000)
-    parser.add_argument("--fee", type=float, default=0.05, help="Fee as decimal (0.05 = 5%)")
+    parser.add_argument(
+        "--fee", type=float, default=0.05, help="Fee as decimal (0.05 = 5%)"
+    )
     args = parser.parse_args()
 
     backtest(args.data, args.trigger, args.amount, args.bankroll, args.fee)

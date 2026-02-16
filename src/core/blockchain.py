@@ -64,10 +64,12 @@ class PolygonscanClient:
             max_retries=retry_strategy,
         )
         self.session.mount("https://", adapter)
-        self.session.headers.update({
-            "User-Agent": "PolymarketBot/2.0",
-            "Accept": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "PolymarketBot/2.0",
+                "Accept": "application/json",
+            }
+        )
 
         # Cache to avoid refetching same transactions
         self._cache: dict[str, OnChainTxData] = {}
@@ -115,7 +117,9 @@ class PolygonscanClient:
             gas_price_gwei = gas_price_wei / 1e9
 
             # Effective gas price (for EIP-1559 transactions)
-            effective_gas_price_wei = int(receipt.get("effectiveGasPrice", tx_data.get("gasPrice", "0x0")), 16)
+            effective_gas_price_wei = int(
+                receipt.get("effectiveGasPrice", tx_data.get("gasPrice", "0x0")), 16
+            )
 
             # Calculate tx fee in MATIC (wei -> MATIC = wei / 10^18)
             tx_fee_wei = gas_used * effective_gas_price_wei
@@ -161,7 +165,9 @@ class PolygonscanClient:
         """
         try:
             block_hex = hex(block_number)
-            block_data = self._call("proxy", "eth_getBlockByNumber", tag=block_hex, boolean="false")
+            block_data = self._call(
+                "proxy", "eth_getBlockByNumber", tag=block_hex, boolean="false"
+            )
             if block_data and block_data != "null":
                 timestamp_hex = block_data.get("timestamp", "0x0")
                 return int(timestamp_hex, 16)

@@ -68,13 +68,19 @@ class Config:
     REST_RETRIES: int = int(os.getenv("REST_RETRIES", "2"))
 
     # Trading client settings
-    SIGNATURE_TYPE: int = int(os.getenv("SIGNATURE_TYPE", "0"))  # 0=EOA/MetaMask, 1=Magic/proxy
+    SIGNATURE_TYPE: int = int(
+        os.getenv("SIGNATURE_TYPE", "0")
+    )  # 0=EOA/MetaMask, 1=Magic/proxy
     FUNDER_ADDRESS: str = os.getenv("FUNDER_ADDRESS", "")  # Required for proxy wallets
 
     # Resilience settings
     CIRCUIT_BREAKER_THRESHOLD: int = int(os.getenv("CIRCUIT_BREAKER_THRESHOLD", "5"))
-    CIRCUIT_BREAKER_RECOVERY_TIME: int = int(os.getenv("CIRCUIT_BREAKER_RECOVERY_TIME", "60"))
-    RATE_LIMIT_REQUESTS_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
+    CIRCUIT_BREAKER_RECOVERY_TIME: int = int(
+        os.getenv("CIRCUIT_BREAKER_RECOVERY_TIME", "60")
+    )
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = int(
+        os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120")
+    )
 
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -85,14 +91,26 @@ class Config:
     # Delay impact model parameters
     DELAY_MODEL_BASE_COEF: float = float(os.getenv("DELAY_MODEL_BASE_COEF", "0.8"))
     DELAY_MODEL_MAX_IMPACT: float = float(os.getenv("DELAY_MODEL_MAX_IMPACT", "10.0"))
-    DELAY_MODEL_BASELINE_SPREAD: float = float(os.getenv("DELAY_MODEL_BASELINE_SPREAD", "0.02"))
+    DELAY_MODEL_BASELINE_SPREAD: float = float(
+        os.getenv("DELAY_MODEL_BASELINE_SPREAD", "0.02")
+    )
 
     # Selective copytrade filter
     SELECTIVE_FILTER: bool = os.getenv("SELECTIVE_FILTER", "false").lower() == "true"
     SELECTIVE_MAX_DELAY_MS: int = int(os.getenv("SELECTIVE_MAX_DELAY_MS", "20000"))
-    SELECTIVE_MIN_FILL_PRICE: float = float(os.getenv("SELECTIVE_MIN_FILL_PRICE", "0.55"))
-    SELECTIVE_MAX_FILL_PRICE: float = float(os.getenv("SELECTIVE_MAX_FILL_PRICE", "0.80"))
-    SELECTIVE_MAX_PRICE_MOVEMENT_PCT: float = float(os.getenv("SELECTIVE_MAX_PRICE_MOVEMENT_PCT", "15.0"))
+    SELECTIVE_MIN_FILL_PRICE: float = float(
+        os.getenv("SELECTIVE_MIN_FILL_PRICE", "0.55")
+    )
+    SELECTIVE_MAX_FILL_PRICE: float = float(
+        os.getenv("SELECTIVE_MAX_FILL_PRICE", "0.80")
+    )
+    SELECTIVE_MAX_PRICE_MOVEMENT_PCT: float = float(
+        os.getenv("SELECTIVE_MAX_PRICE_MOVEMENT_PCT", "15.0")
+    )
     SELECTIVE_MAX_SPREAD: float = float(os.getenv("SELECTIVE_MAX_SPREAD", "0.025"))
-    SELECTIVE_MAX_VOLATILITY_FACTOR: float = float(os.getenv("SELECTIVE_MAX_VOLATILITY_FACTOR", "1.25"))
-    SELECTIVE_MIN_DEPTH_AT_BEST: float = float(os.getenv("SELECTIVE_MIN_DEPTH_AT_BEST", "5.0"))
+    SELECTIVE_MAX_VOLATILITY_FACTOR: float = float(
+        os.getenv("SELECTIVE_MAX_VOLATILITY_FACTOR", "1.25")
+    )
+    SELECTIVE_MIN_DEPTH_AT_BEST: float = float(
+        os.getenv("SELECTIVE_MIN_DEPTH_AT_BEST", "5.0")
+    )

@@ -85,7 +85,9 @@ def evaluate(outcomes: list[str], trigger: int = 4) -> Signal:
     )
 
 
-def kelly_size(confidence: float, odds: float, bankroll: float, fraction: float = 0.25) -> float:
+def kelly_size(
+    confidence: float, odds: float, bankroll: float, fraction: float = 0.25
+) -> float:
     """
     Calculate bet size using fractional Kelly criterion.
 

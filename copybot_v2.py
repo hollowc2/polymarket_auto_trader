@@ -25,10 +25,17 @@ from datetime import datetime, timedelta
 from src.config import Config, LOCAL_TZ, TIMEZONE_NAME
 from src.strategies.copytrade import CopySignal
 from src.strategies.copytrade_ws import HybridCopytradeMonitor
-from src.infra.logging_config import get_logger, StructuredLogger
+from src.infra.logging_config import get_logger
 from src.core.polymarket import PolymarketClient, DelayImpactModel
 from src.core.polymarket_ws import MarketDataCache, TradeEvent
-from src.infra.resilience import CircuitBreaker, RateLimiter, HealthCheck, CircuitOpenError, categorize_error, ErrorCategory
+from src.infra.resilience import (
+    CircuitBreaker,
+    RateLimiter,
+    HealthCheck,
+    CircuitOpenError,
+    categorize_error,
+    ErrorCategory,
+)
 from src.strategies.selective_filter import SelectiveFilter
 from src.core.trader import LiveTrader, PaperTrader, TradingState
 
@@ -45,7 +52,9 @@ def handle_signal(sig, frame):
     running = False
 
 
-def estimate_execution_from_book(book: dict, side: str, amount_usd: float, copy_delay_ms: int = 0):
+def estimate_execution_from_book(
+    book: dict, side: str, amount_usd: float, copy_delay_ms: int = 0
+):
     """Estimate execution details from a pre-fetched orderbook snapshot."""
     bids = book.get("bids", []) if book else []
     asks = book.get("asks", []) if book else []
@@ -123,9 +132,9 @@ def estimate_execution_from_book(book: dict, side: str, amount_usd: float, copy_
             side=side,
         )
         if side == "BUY":
-            execution_price *= (1 + delay_impact_pct / 100)
+            execution_price *= 1 + delay_impact_pct / 100
         else:
-            execution_price *= (1 - delay_impact_pct / 100)
+            execution_price *= 1 - delay_impact_pct / 100
         execution_price = max(0.01, min(0.99, execution_price))
 
     return {
@@ -147,7 +156,11 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
 
     # Format wallet list for help text
-    wallet_list = "\n    ".join(Config.COPY_WALLETS) if Config.COPY_WALLETS else "(none configured)"
+    wallet_list = (
+        "\n    ".join(Config.COPY_WALLETS)
+        if Config.COPY_WALLETS
+        else "(none configured)"
+    )
 
     parser = argparse.ArgumentParser(
         description="Polymarket BTC 5-Min Copytrade Bot v2 (Low-Latency)",
@@ -167,14 +180,14 @@ Environment Variables (.env):
   PRIVATE_KEY        Polygon wallet private key (required for live)
 
 Current Configuration:
-  Mode:              {'PAPER' if Config.PAPER_TRADE else 'LIVE'}
+  Mode:              {"PAPER" if Config.PAPER_TRADE else "LIVE"}
   Bet Amount:        ${Config.BET_AMOUNT}
   Min Bet:           ${Config.MIN_BET}
   Max Daily Bets:    {Config.MAX_DAILY_BETS}
   Max Daily Loss:    ${Config.MAX_DAILY_LOSS}
   Poll Interval:     {Config.FAST_POLL_INTERVAL}s (fast mode)
   REST Timeout:      {Config.REST_TIMEOUT}s
-  WebSocket:         {'Enabled' if Config.USE_WEBSOCKET else 'Disabled'}
+  WebSocket:         {"Enabled" if Config.USE_WEBSOCKET else "Disabled"}
   Timezone:          {TIMEZONE_NAME}
   Wallets:
     {wallet_list}
@@ -195,63 +208,86 @@ Examples:
 
   # Custom poll interval (0.5s = very fast)
   python copybot_v2.py --paper --poll 0.5 --wallets 0x1234...
-"""
+""",
     )
     parser.add_argument(
-        "--paper", action="store_true",
-        help=f"Force paper trading mode (current: {Config.PAPER_TRADE})"
+        "--paper",
+        action="store_true",
+        help=f"Force paper trading mode (current: {Config.PAPER_TRADE})",
     )
     parser.add_argument(
-        "--live", action="store_true",
-        help="Force live trading mode (requires PRIVATE_KEY)"
+        "--live",
+        action="store_true",
+        help="Force live trading mode (requires PRIVATE_KEY)",
     )
     parser.add_argument(
-        "--amount", type=float, metavar="USD",
-        help=f"Bet amount in USD (default: {Config.BET_AMOUNT})"
+        "--amount",
+        type=float,
+        metavar="USD",
+        help=f"Bet amount in USD (default: {Config.BET_AMOUNT})",
     )
     parser.add_argument(
-        "--bankroll", type=float, metavar="USD",
-        help="Set starting bankroll (overrides saved state)"
+        "--bankroll",
+        type=float,
+        metavar="USD",
+        help="Set starting bankroll (overrides saved state)",
     )
     parser.add_argument(
-        "--wallets", type=str, metavar="ADDR",
-        help="Comma-separated wallet addresses to copy"
+        "--wallets",
+        type=str,
+        metavar="ADDR",
+        help="Comma-separated wallet addresses to copy",
     )
     parser.add_argument(
-        "--poll", type=float, metavar="SEC",
-        help=f"Poll interval in seconds (default: {Config.FAST_POLL_INTERVAL})"
+        "--poll",
+        type=float,
+        metavar="SEC",
+        help=f"Poll interval in seconds (default: {Config.FAST_POLL_INTERVAL})",
     )
     parser.add_argument(
-        "--no-websocket", action="store_true",
-        help="Disable WebSocket (REST only mode)"
+        "--no-websocket", action="store_true", help="Disable WebSocket (REST only mode)"
     )
     parser.add_argument(
-        "--max-bets", type=int, metavar="N",
-        help=f"Maximum daily bets (default: {Config.MAX_DAILY_BETS})"
+        "--max-bets",
+        type=int,
+        metavar="N",
+        help=f"Maximum daily bets (default: {Config.MAX_DAILY_BETS})",
     )
     parser.add_argument(
-        "--max-loss", type=float, metavar="USD",
-        help=f"Stop after this daily loss (default: {Config.MAX_DAILY_LOSS})"
+        "--max-loss",
+        type=float,
+        metavar="USD",
+        help=f"Stop after this daily loss (default: {Config.MAX_DAILY_LOSS})",
     )
     parser.add_argument(
-        "--retry", type=int, metavar="N", default=0,
-        help="Retry N times on bankrupt (resets bankroll each retry)"
+        "--retry",
+        type=int,
+        metavar="N",
+        default=0,
+        help="Retry N times on bankrupt (resets bankroll each retry)",
     )
     parser.add_argument(
-        "--selective", action="store_true",
-        help=f"Enable selective trade filter (default: {Config.SELECTIVE_FILTER})"
+        "--selective",
+        action="store_true",
+        help=f"Enable selective trade filter (default: {Config.SELECTIVE_FILTER})",
     )
     parser.add_argument(
-        "--max-delay", type=float, metavar="SEC",
-        help=f"Selective filter max copy delay in seconds (default: {Config.SELECTIVE_MAX_DELAY_MS / 1000:.1f})"
+        "--max-delay",
+        type=float,
+        metavar="SEC",
+        help=f"Selective filter max copy delay in seconds (default: {Config.SELECTIVE_MAX_DELAY_MS / 1000:.1f})",
     )
     parser.add_argument(
-        "--min-fill", type=float, metavar="PRICE",
-        help=f"Selective filter minimum fill price (default: {Config.SELECTIVE_MIN_FILL_PRICE})"
+        "--min-fill",
+        type=float,
+        metavar="PRICE",
+        help=f"Selective filter minimum fill price (default: {Config.SELECTIVE_MIN_FILL_PRICE})",
     )
     parser.add_argument(
-        "--max-fill", type=float, metavar="PRICE",
-        help=f"Selective filter maximum fill price (default: {Config.SELECTIVE_MAX_FILL_PRICE})"
+        "--max-fill",
+        type=float,
+        metavar="PRICE",
+        help=f"Selective filter maximum fill price (default: {Config.SELECTIVE_MAX_FILL_PRICE})",
     )
     # Internal: tracks current retry attempt (for subprocess restarts)
     parser.add_argument("--_retry_count", type=int, default=0, help=argparse.SUPPRESS)
@@ -277,7 +313,9 @@ Examples:
         selective_overrides["min_fill_price"] = args.min_fill
     if args.max_fill is not None:
         selective_overrides["max_fill_price"] = args.max_fill
-    selective_filter = SelectiveFilter(config=selective_overrides) if selective_enabled else None
+    selective_filter = (
+        SelectiveFilter(config=selective_overrides) if selective_enabled else None
+    )
 
     # Parse wallets
     wallets = Config.COPY_WALLETS
@@ -288,7 +326,9 @@ Examples:
         print("Error: No wallets to copy.")
         print("Set COPY_WALLETS in .env or use --wallets flag")
         print("\nExample:")
-        print("  python copybot_v2.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313")
+        print(
+            "  python copybot_v2.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313"
+        )
         sys.exit(1)
 
     # === INITIALIZATION ===
@@ -302,11 +342,14 @@ Examples:
 
     # Register health checks
     health.register("api", lambda: {"healthy": True, "timeout": Config.REST_TIMEOUT})
-    health.register("circuit_breaker", lambda: {
-        "healthy": api_circuit.state.value != "open",
-        "state": api_circuit.state.value,
-        "failures": api_circuit._failures,
-    })
+    health.register(
+        "circuit_breaker",
+        lambda: {
+            "healthy": api_circuit.state.value != "open",
+            "state": api_circuit.state.value,
+            "failures": api_circuit._failures,
+        },
+    )
 
     # Pre-fetch upcoming markets (silent)
     upcoming = client.get_upcoming_market_timestamps(count=5)
@@ -321,10 +364,13 @@ Examples:
             time.sleep(1)  # Wait for connection
 
             # Register WebSocket health check
-            health.register("websocket", lambda: {
-                "healthy": market_cache.ws_connected if market_cache else False,
-                "stats": market_cache.stats if market_cache else {},
-            })
+            health.register(
+                "websocket",
+                lambda: {
+                    "healthy": market_cache.ws_connected if market_cache else False,
+                    "stats": market_cache.stats if market_cache else {},
+                },
+            )
         except Exception as e:
             log.warning("websocket_init_failed", error=str(e))
             use_websocket = False
@@ -337,6 +383,7 @@ Examples:
 
     # Wire up WebSocket trade callback for immediate polling
     if market_cache:
+
         def on_btc_trade(trade: TradeEvent):
             """Callback when WebSocket detects a trade on BTC 5-min market."""
             # Check if this is a BTC 5-min market
@@ -345,23 +392,29 @@ Examples:
                 signals = monitor.trigger_immediate_poll(trade.market_id)
                 for sig in signals:
                     signal_queue.put(sig)
-                    log.debug("ws_triggered_signal",
+                    log.debug(
+                        "ws_triggered_signal",
                         market=trade.market_id,
                         trader=sig.trader_name,
                         direction=sig.direction,
-                        latency_ms=int((time.time() - trade.timestamp) * 1000) if trade.timestamp else 0,
+                        latency_ms=int((time.time() - trade.timestamp) * 1000)
+                        if trade.timestamp
+                        else 0,
                     )
 
         market_cache.on_trade(on_btc_trade)
         log.debug("websocket_callback_registered")
 
     # Register monitor health check
-    health.register("monitor", lambda: {
-        "healthy": True,
-        "polls": monitor.polls,
-        "triggered_polls": monitor._triggered_polls,
-        "avg_latency_ms": monitor.avg_poll_latency_ms,
-    })
+    health.register(
+        "monitor",
+        lambda: {
+            "healthy": True,
+            "polls": monitor.polls,
+            "triggered_polls": monitor._triggered_polls,
+            "avg_latency_ms": monitor.avg_poll_latency_ms,
+        },
+    )
 
     # Load trading state
     state = TradingState.load()
@@ -378,10 +431,12 @@ Examples:
     mode_str = "PAPER" if paper_mode else "LIVE"
     ws_str = "✓" if use_websocket else "✗"
     log.status_line(f"═══ Copybot v2 ({mode_str}) ═══")
-    log.status_line(f"Amount: ${bet_amount:.2f} | Bankroll: ${state.bankroll:.2f} | Poll: {poll_interval}s | WS: {ws_str}")
+    log.status_line(
+        f"Amount: ${bet_amount:.2f} | Bankroll: ${state.bankroll:.2f} | Poll: {poll_interval}s | WS: {ws_str}"
+    )
     if selective_enabled:
         log.status_line(
-            f"Selective: ON | delay<={selective_filter.max_delay_ms/1000:.1f}s | fill={selective_filter.min_fill_price:.2f}-{selective_filter.max_fill_price:.2f}"
+            f"Selective: ON | delay<={selective_filter.max_delay_ms / 1000:.1f}s | fill={selective_filter.min_fill_price:.2f}-{selective_filter.max_fill_price:.2f}"
         )
     log.status_line(f"Tracking {len(wallets)} wallet(s)")
     for w in wallets:
@@ -396,7 +451,9 @@ Examples:
     # Initialize pending from unsettled trades in state (survives restart)
     pending: list = [t for t in state.trades if t.outcome is None]
     if pending:
-        log.status_line(f"Resuming {len(pending)} unsettled trade(s) from previous session")
+        log.status_line(
+            f"Resuming {len(pending)} unsettled trade(s) from previous session"
+        )
     if copied_markets:
         log.status_line(f"Loaded {len(copied_markets)} previously copied market(s)")
 
@@ -408,7 +465,9 @@ Examples:
     for wallet in wallets:
         recent = monitor.get_latest_btc_5m_trades(wallet, limit=1)
         for sig in recent:
-            log.status_line(f"  Recent: {sig.trader_name} {sig.side} {sig.direction.upper()} @ {sig.price:.2f} (${sig.usdc_amount:.2f})")
+            log.status_line(
+                f"  Recent: {sig.trader_name} {sig.side} {sig.direction.upper()} @ {sig.price:.2f} (${sig.usdc_amount:.2f})"
+            )
     print()  # Blank line before main loop
 
     # Stats tracking
@@ -474,14 +533,35 @@ Examples:
                         # Just like real trading: if you can't afford the next bet, you're done
                         if state.bankroll < Config.MIN_BET:
                             log.status_line("")
-                            log.status_line("╔════════════════════════════════════════╗")
-                            log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
-                            log.status_line("╠════════════════════════════════════════╣")
-                            log.status_line(f"║  Final Bankroll: ${state.bankroll:.2f}".ljust(41) + "║")
-                            log.status_line(f"║  Minimum Required: ${Config.MIN_BET:.2f}".ljust(41) + "║")
-                            log.status_line(f"║  Session P&L: ${session_pnl:+.2f}".ljust(41) + "║")
-                            log.status_line(f"║  Record: {session_wins}W / {session_losses}L".ljust(41) + "║")
-                            log.status_line("╚════════════════════════════════════════╝")
+                            log.status_line(
+                                "╔════════════════════════════════════════╗"
+                            )
+                            log.status_line(
+                                "║  SIMULATION ENDED - INSUFFICIENT FUNDS ║"
+                            )
+                            log.status_line(
+                                "╠════════════════════════════════════════╣"
+                            )
+                            log.status_line(
+                                f"║  Final Bankroll: ${state.bankroll:.2f}".ljust(41)
+                                + "║"
+                            )
+                            log.status_line(
+                                f"║  Minimum Required: ${Config.MIN_BET:.2f}".ljust(41)
+                                + "║"
+                            )
+                            log.status_line(
+                                f"║  Session P&L: ${session_pnl:+.2f}".ljust(41) + "║"
+                            )
+                            log.status_line(
+                                f"║  Record: {session_wins}W / {session_losses}L".ljust(
+                                    41
+                                )
+                                + "║"
+                            )
+                            log.status_line(
+                                "╚════════════════════════════════════════╝"
+                            )
                             bankrupt = True
                             break  # Exit the for loop
 
@@ -508,7 +588,9 @@ Examples:
                     log.status_line("╔════════════════════════════════════════╗")
                     log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
                     log.status_line("╚════════════════════════════════════════╝")
-                    log.status_line(f"Bankroll ${state.bankroll:.2f} < Min bet ${Config.MIN_BET:.2f}")
+                    log.status_line(
+                        f"Bankroll ${state.bankroll:.2f} < Min bet ${Config.MIN_BET:.2f}"
+                    )
                     bankrupt = True
                     break
                 elif "Max daily loss" in reason:
@@ -516,7 +598,9 @@ Examples:
                     log.status_line("╔════════════════════════════════════════╗")
                     log.status_line("║  SIMULATION ENDED - DAILY LOSS LIMIT   ║")
                     log.status_line("╚════════════════════════════════════════╝")
-                    log.status_line(f"Daily P&L: ${state.daily_pnl:.2f} exceeded -${Config.MAX_DAILY_LOSS:.2f} limit")
+                    log.status_line(
+                        f"Daily P&L: ${state.daily_pnl:.2f} exceeded -${Config.MAX_DAILY_LOSS:.2f} limit"
+                    )
                     break
                 elif "Max daily bets" in reason:
                     # Calculate seconds until midnight in local timezone
@@ -526,7 +610,9 @@ Examples:
                     seconds_until_reset = (midnight - now).total_seconds()
                     hours, remainder = divmod(int(seconds_until_reset), 3600)
                     minutes = remainder // 60
-                    log.status_line(f"Daily bet limit reached ({Config.MAX_DAILY_BETS}). Sleeping {hours}h {minutes}m until midnight reset...")
+                    log.status_line(
+                        f"Daily bet limit reached ({Config.MAX_DAILY_BETS}). Sleeping {hours}h {minutes}m until midnight reset..."
+                    )
                     time.sleep(seconds_until_reset)
                     state.daily_bets = 0  # Reset counter after sleep
                     state.daily_pnl = 0.0
@@ -538,7 +624,10 @@ Examples:
 
             # === CHECK CIRCUIT BREAKER ===
             if api_circuit.state.value == "open":
-                log.warning("circuit_open_wait", recovery_time=Config.CIRCUIT_BREAKER_RECOVERY_TIME)
+                log.warning(
+                    "circuit_open_wait",
+                    recovery_time=Config.CIRCUIT_BREAKER_RECOVERY_TIME,
+                )
                 time.sleep(5)
                 continue
 
@@ -553,12 +642,17 @@ Examples:
                     ws_signal = signal_queue.get_nowait()
                     # Avoid duplicates - check if already in signals
                     is_duplicate = any(
-                        s.wallet == ws_signal.wallet and s.market_ts == ws_signal.market_ts
+                        s.wallet == ws_signal.wallet
+                        and s.market_ts == ws_signal.market_ts
                         for s in signals
                     )
                     if not is_duplicate:
                         signals.append(ws_signal)
-                        log.debug("ws_signal_added", trader=ws_signal.trader_name, market_ts=ws_signal.market_ts)
+                        log.debug(
+                            "ws_signal_added",
+                            trader=ws_signal.trader_name,
+                            market_ts=ws_signal.market_ts,
+                        )
                 except queue.Empty:
                     break
 
@@ -570,7 +664,9 @@ Examples:
 
                 # Skip SELL signals (we only copy buys for now)
                 if sig.side != "BUY":
-                    log.debug("skip_sell", trader=sig.trader_name, direction=sig.direction)
+                    log.debug(
+                        "skip_sell", trader=sig.trader_name, direction=sig.direction
+                    )
                     copied_markets.add(key)
                     continue
 
@@ -622,15 +718,21 @@ Examples:
                     log.status_line("╔════════════════════════════════════════╗")
                     log.status_line("║  SIMULATION ENDED - INSUFFICIENT FUNDS ║")
                     log.status_line("╚════════════════════════════════════════╝")
-                    log.status_line(f"Cannot place ${Config.MIN_BET:.2f} bet with ${state.bankroll:.2f} bankroll")
+                    log.status_line(
+                        f"Cannot place ${Config.MIN_BET:.2f} bet with ${state.bankroll:.2f} bankroll"
+                    )
                     bankrupt = True
                     break
 
                 # Bet the requested amount, but never more than bankroll
                 amount = min(bet_amount, state.bankroll)
                 if amount < Config.MIN_BET:
-                    log.warning("skip_insufficient_funds",
-                        requested=bet_amount, available=state.bankroll, minimum=Config.MIN_BET)
+                    log.warning(
+                        "skip_insufficient_funds",
+                        requested=bet_amount,
+                        available=state.bankroll,
+                        minimum=Config.MIN_BET,
+                    )
                     copied_markets.add(key)
                     continue
 
@@ -649,7 +751,9 @@ Examples:
                 )
 
                 # Pre-query orderbook and estimate execution (shared by filter + trader)
-                token_id = market.up_token_id if direction == "up" else market.down_token_id
+                token_id = (
+                    market.up_token_id if direction == "up" else market.down_token_id
+                )
                 precomputed_execution = None
                 if token_id:
                     try:
@@ -664,10 +768,15 @@ Examples:
                             amount_usd=amount,
                             copy_delay_ms=copy_delay_ms,
                         )
-                        entry_price = market.up_price if direction == "up" else market.down_price
+                        entry_price = (
+                            market.up_price if direction == "up" else market.down_price
+                        )
                         price_movement_pct = 0.0
                         if entry_price > 0:
-                            price_movement_pct = ((exec_est["execution_price"] - entry_price) / entry_price) * 100
+                            price_movement_pct = (
+                                (exec_est["execution_price"] - entry_price)
+                                / entry_price
+                            ) * 100
 
                         precomputed_execution = {
                             **exec_est,
@@ -676,18 +785,26 @@ Examples:
                             "copy_delay_ms": copy_delay_ms,
                         }
                     except Exception as e:
-                        log.debug("precompute_execution_failed", error=str(e), market=market.slug)
+                        log.debug(
+                            "precompute_execution_failed",
+                            error=str(e),
+                            market=market.slug,
+                        )
 
                 if selective_enabled and selective_filter:
                     execution_info = precomputed_execution or {
-                        "execution_price": market.up_price if direction == "up" else market.down_price,
+                        "execution_price": market.up_price
+                        if direction == "up"
+                        else market.down_price,
                         "spread": 0.0,
                         "price_movement_pct": 0.0,
                         "copy_delay_ms": copy_delay_ms,
                         "depth_at_best": 0.0,
                         "delay_breakdown": None,
                     }
-                    should_trade, reason = selective_filter.should_trade(sig, market, execution_info)
+                    should_trade, reason = selective_filter.should_trade(
+                        sig, market, execution_info
+                    )
                     trade_label = f"{sig.trader_name} {direction.upper()} ${amount:.2f}"
                     if not should_trade:
                         log.status_line(f"[FILTER] ⏭️  SKIP: {reason} | {trade_label}")
@@ -773,24 +890,44 @@ Examples:
                             # use_cache=False for fresh prices during heartbeat
                             market = client.get_market(trade.timestamp, use_cache=False)
                             if market:
-                                current_price = market.up_price if trade.direction == "up" else market.down_price
-                                exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
-                                shares = trade.amount / exec_price if exec_price > 0 else 0
+                                current_price = (
+                                    market.up_price
+                                    if trade.direction == "up"
+                                    else market.down_price
+                                )
+                                exec_price = (
+                                    trade.execution_price
+                                    if trade.execution_price > 0
+                                    else trade.entry_price
+                                )
+                                shares = (
+                                    trade.amount / exec_price if exec_price > 0 else 0
+                                )
 
                                 win_prob = current_price
                                 gross_win = shares - trade.amount
-                                fee_on_win = gross_win * trade.fee_pct if gross_win > 0 else 0
+                                fee_on_win = (
+                                    gross_win * trade.fee_pct if gross_win > 0 else 0
+                                )
                                 net_win = gross_win - fee_on_win
-                                ev = (win_prob * net_win) + ((1 - win_prob) * (-trade.amount))
+                                ev = (win_prob * net_win) + (
+                                    (1 - win_prob) * (-trade.amount)
+                                )
                                 unrealized_pnl += ev
 
                                 # Track for pending display
-                                implied_winner = "up" if market.up_price > market.down_price else "down"
-                                pending_info.append({
-                                    "direction": trade.direction,
-                                    "current_prob": current_price,
-                                    "likely_win": trade.direction == implied_winner,
-                                })
+                                implied_winner = (
+                                    "up"
+                                    if market.up_price > market.down_price
+                                    else "down"
+                                )
+                                pending_info.append(
+                                    {
+                                        "direction": trade.direction,
+                                        "current_prob": current_price,
+                                        "likely_win": trade.direction == implied_winner,
+                                    }
+                                )
                     except Exception:
                         pass
 
@@ -855,7 +992,9 @@ Examples:
 
     total = session_wins + session_losses
     win_rate = (session_wins / total * 100) if total > 0 else 0
-    log.status_line(f"Session: {session_wins}W/{session_losses}L ({win_rate:.0f}%) | PnL: ${session_pnl:+.2f}")
+    log.status_line(
+        f"Session: {session_wins}W/{session_losses}L ({win_rate:.0f}%) | PnL: ${session_pnl:+.2f}"
+    )
     log.status_line(f"Final bankroll: ${state.bankroll:.2f}")
 
     # Handle retry logic

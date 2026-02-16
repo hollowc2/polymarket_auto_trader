@@ -3,13 +3,11 @@
 Provides consistent, parseable log output with key metrics and colors.
 """
 
-import json
 import sys
-import time
 from datetime import datetime
 from typing import Any
 
-from src.config import Config, LOCAL_TZ, TIMEZONE_NAME
+from src.config import Config, LOCAL_TZ
 
 
 # ANSI color codes
@@ -65,7 +63,9 @@ class StructuredLogger:
         "CRITICAL": (Colors.BG_RED + Colors.WHITE, "☠"),
     }
 
-    def __init__(self, name: str = "copybot", level: str | None = None, use_colors: bool = True):
+    def __init__(
+        self, name: str = "copybot", level: str | None = None, use_colors: bool = True
+    ):
         """Initialize logger.
 
         Args:
@@ -169,7 +169,7 @@ class StructuredLogger:
         amount: float,
         price: float,
         latency_ms: float | None = None,
-        **kwargs
+        **kwargs,
     ):
         """Log order placement."""
         self.info(
@@ -179,7 +179,7 @@ class StructuredLogger:
             amount=amount,
             price=price,
             latency_ms=latency_ms,
-            **kwargs
+            **kwargs,
         )
 
     def order_filled(
@@ -188,7 +188,7 @@ class StructuredLogger:
         filled_size: float,
         fill_price: float,
         latency_ms: float | None = None,
-        **kwargs
+        **kwargs,
     ):
         """Log order fill."""
         self.info(
@@ -197,7 +197,7 @@ class StructuredLogger:
             filled_size=filled_size,
             fill_price=fill_price,
             latency_ms=latency_ms,
-            **kwargs
+            **kwargs,
         )
 
     def order_failed(self, order_id: str, error: str, **kwargs):
@@ -215,7 +215,7 @@ class StructuredLogger:
         pending: int = 0,
         wins: int = 0,
         losses: int = 0,
-        **kwargs
+        **kwargs,
     ):
         """Log trade settlement - clean, single line."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
@@ -245,7 +245,7 @@ class StructuredLogger:
         price: float,
         delay_ms: int,
         our_amount: float = 0,
-        **kwargs
+        **kwargs,
     ):
         """Log copy trade signal with full details."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
@@ -253,10 +253,16 @@ class StructuredLogger:
 
         copy_icon = self._c(Colors.MAGENTA + Colors.BOLD, "📋 COPY")
         trader_str = self._c(Colors.CYAN, trader)
-        direction_str = self._c(Colors.GREEN if direction.lower() == "up" else Colors.RED, direction.upper())
+        direction_str = self._c(
+            Colors.GREEN if direction.lower() == "up" else Colors.RED, direction.upper()
+        )
 
         delay_sec = delay_ms / 1000
-        delay_color = Colors.GREEN if delay_sec < 5 else (Colors.YELLOW if delay_sec < 15 else Colors.RED)
+        delay_color = (
+            Colors.GREEN
+            if delay_sec < 5
+            else (Colors.YELLOW if delay_sec < 15 else Colors.RED)
+        )
         delay_str = self._c(delay_color, f"{delay_sec:.1f}s")
 
         line = f"{ts_str} {copy_icon} {trader_str}: {direction_str} @ {price:.2f} (${amount:.0f}) → ${our_amount:.2f} | Delay: {delay_str}"
@@ -265,7 +271,14 @@ class StructuredLogger:
     def circuit_breaker(self, name: str, state: str, failures: int, **kwargs):
         """Log circuit breaker state change."""
         level = "WARNING" if state == "open" else "INFO"
-        self._log(level, "circuit_breaker", name=name, state=state, failures=failures, **kwargs)
+        self._log(
+            level,
+            "circuit_breaker",
+            name=name,
+            state=state,
+            failures=failures,
+            **kwargs,
+        )
 
     def rate_limited(self, endpoint: str, wait_time: float, **kwargs):
         """Log rate limiting."""
@@ -285,14 +298,16 @@ class StructuredLogger:
         bankroll: float,
         unrealized: float = 0,
         ws_connected: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """Log periodic heartbeat with status."""
         ts = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
         ts_str = self._c(Colors.DIM, f"[{ts}]")
 
         # Heartbeat symbol
-        ws_status = self._c(Colors.GREEN, "●") if ws_connected else self._c(Colors.YELLOW, "○")
+        ws_status = (
+            self._c(Colors.GREEN, "●") if ws_connected else self._c(Colors.YELLOW, "○")
+        )
 
         total = wins + losses
         if total > 0:

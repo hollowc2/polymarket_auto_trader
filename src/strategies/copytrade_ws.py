@@ -22,6 +22,7 @@ from src.strategies.copytrade import CopySignal
 @dataclass
 class WalletActivity:
     """Activity event from wallet monitoring."""
+
     wallet: str
     event_type: str  # "TRADE", "ORDER", etc.
     market_slug: str
@@ -133,7 +134,7 @@ class CopytradeWebSocket:
                     close_timeout=5,
                 ) as ws:
                     self._connected.set()
-                    print(f"[copytrade-ws] Connected")
+                    print("[copytrade-ws] Connected")
 
                     # Subscribe to BTC 5-min markets (current + next few windows)
                     await self._subscribe_btc_markets(ws)
@@ -228,7 +229,9 @@ class CopytradeWebSocket:
             "wallets_monitored": len(self.wallets),
             "signals_emitted": self.signals_emitted,
             "reconnect_count": self.reconnect_count,
-            "last_signal_age": time.time() - self.last_signal_time if self.last_signal_time else None,
+            "last_signal_age": time.time() - self.last_signal_time
+            if self.last_signal_time
+            else None,
         }
 
 
@@ -271,11 +274,13 @@ class HybridCopytradeMonitor:
             max_retries=retry_strategy,
         )
         self.session.mount("https://", adapter)
-        self.session.headers.update({
-            "User-Agent": "PolymarketCopyBot/2.0",
-            "Accept": "application/json",
-            "Connection": "keep-alive",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "PolymarketCopyBot/2.0",
+                "Accept": "application/json",
+                "Connection": "keep-alive",
+            }
+        )
 
         # Track last seen trade per wallet
         self._last_seen: dict[str, int] = {w: int(time.time()) for w in wallets}
@@ -303,7 +308,9 @@ class HybridCopytradeMonitor:
         """Register a signal callback."""
         self._callbacks.append(callback)
 
-    def trigger_immediate_poll(self, market_slug: str | None = None) -> list[CopySignal]:
+    def trigger_immediate_poll(
+        self, market_slug: str | None = None
+    ) -> list[CopySignal]:
         """Immediately poll when WebSocket detects market activity.
 
         Called when a trade is detected on a BTC 5-min market via WebSocket.
@@ -432,7 +439,7 @@ class HybridCopytradeMonitor:
                         signal.gas_used = on_chain.gas_used
                         signal.tx_fee_matic = on_chain.tx_fee_matic
                         signal.on_chain_timestamp = on_chain.timestamp
-                except Exception as e:
+                except Exception:
                     # Don't fail signal on Polygonscan errors
                     pass
 

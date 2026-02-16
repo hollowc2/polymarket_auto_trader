@@ -7,7 +7,6 @@ import asyncio
 import json
 import threading
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -18,6 +17,7 @@ from websockets.exceptions import ConnectionClosed
 @dataclass
 class OrderBookLevel:
     """Single price level in orderbook."""
+
     price: float
     size: float
 
@@ -25,6 +25,7 @@ class OrderBookLevel:
 @dataclass
 class CachedOrderBook:
     """Cached order book state with timestamp."""
+
     token_id: str
     bids: list[OrderBookLevel] = field(default_factory=list)
     asks: list[OrderBookLevel] = field(default_factory=list)
@@ -59,7 +60,9 @@ class CachedOrderBook:
                 self._update_level(self.asks, price, size, reverse=False)
         self._recalculate()
 
-    def _update_level(self, levels: list[OrderBookLevel], price: float, size: float, reverse: bool):
+    def _update_level(
+        self, levels: list[OrderBookLevel], price: float, size: float, reverse: bool
+    ):
         """Update a single price level."""
         # Find existing level
         for i, level in enumerate(levels):
@@ -87,7 +90,9 @@ class CachedOrderBook:
         if self.best_bid > 0 and self.best_ask > 0:
             self.mid = (self.best_bid + self.best_ask) / 2
 
-    def get_execution_price(self, side: str, amount_usd: float) -> tuple[float, float, float]:
+    def get_execution_price(
+        self, side: str, amount_usd: float
+    ) -> tuple[float, float, float]:
         """Calculate execution price by walking the book.
 
         Returns: (execution_price, slippage_pct, fill_pct)
@@ -135,6 +140,7 @@ class CachedOrderBook:
 @dataclass
 class TradeEvent:
     """Real-time trade event from WebSocket."""
+
     token_id: str
     market_id: str
     price: float
@@ -226,8 +232,9 @@ class PolymarketWebSocket:
                 pass
 
         # Cancel all pending tasks except current
-        tasks = [t for t in asyncio.all_tasks(self._loop)
-                 if t is not asyncio.current_task()]
+        tasks = [
+            t for t in asyncio.all_tasks(self._loop) if t is not asyncio.current_task()
+        ]
         for task in tasks:
             task.cancel()
 
@@ -376,8 +383,7 @@ class PolymarketWebSocket:
 
         if self._loop and self._connected.is_set():
             asyncio.run_coroutine_threadsafe(
-                self._send_subscribe(condition_id),
-                self._loop
+                self._send_subscribe(condition_id), self._loop
             )
 
     def unsubscribe_market(self, condition_id: str):
@@ -390,10 +396,7 @@ class PolymarketWebSocket:
                 "channel": "market",
                 "market": condition_id,
             }
-            asyncio.run_coroutine_threadsafe(
-                self._ws.send(json.dumps(msg)),
-                self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._ws.send(json.dumps(msg)), self._loop)
 
     def get_orderbook(self, token_id: str) -> CachedOrderBook | None:
         """Get cached orderbook for a token.
@@ -417,14 +420,24 @@ class PolymarketWebSocket:
 
         if book and book.timestamp > 0:
             # Use cached orderbook
-            exec_price, slippage_pct, fill_pct = book.get_execution_price(side, amount_usd)
-            spread = book.best_ask - book.best_bid if book.best_ask > 0 and book.best_bid > 0 else 0
+            exec_price, slippage_pct, fill_pct = book.get_execution_price(
+                side, amount_usd
+            )
+            spread = (
+                book.best_ask - book.best_bid
+                if book.best_ask > 0 and book.best_bid > 0
+                else 0
+            )
 
             # Calculate depth at best level
             if side == "BUY":
-                depth_at_best = book.asks[0].price * book.asks[0].size if book.asks else 0
+                depth_at_best = (
+                    book.asks[0].price * book.asks[0].size if book.asks else 0
+                )
             else:
-                depth_at_best = book.bids[0].price * book.bids[0].size if book.bids else 0
+                depth_at_best = (
+                    book.bids[0].price * book.bids[0].size if book.bids else 0
+                )
 
             # Calculate delay impact using the improved model
             delay_impact_pct = 0.0
@@ -441,12 +454,19 @@ class PolymarketWebSocket:
                 )
 
                 if side == "BUY":
-                    exec_price *= (1 + delay_impact_pct / 100)
+                    exec_price *= 1 + delay_impact_pct / 100
                 else:
-                    exec_price *= (1 - delay_impact_pct / 100)
+                    exec_price *= 1 - delay_impact_pct / 100
                 exec_price = max(0.01, min(0.99, exec_price))
 
-            return exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown
+            return (
+                exec_price,
+                spread,
+                slippage_pct,
+                fill_pct,
+                delay_impact_pct,
+                delay_breakdown,
+            )
 
         # No cached data
         return 0.5, 0.0, 0.0, 100.0, 0.0, None
@@ -469,7 +489,9 @@ class PolymarketWebSocket:
             "connected": self.is_connected(),
             "reconnect_count": self.reconnect_count,
             "messages_received": self.messages_received,
-            "last_message_age": time.time() - self.last_message_time if self.last_message_time else None,
+            "last_message_age": time.time() - self.last_message_time
+            if self.last_message_time
+            else None,
             "subscribed_markets": len(self._subscribed_markets),
             "cached_orderbooks": len(self._orderbooks),
         }
@@ -611,9 +633,6 @@ class UserWebSocket:
         if not self._ws:
             return
 
-        # Generate timestamp for signature
-        timestamp = int(time.time())
-
         # Create authentication message
         auth_msg = {
             "type": "subscribe",
@@ -733,7 +752,9 @@ class UserWebSocket:
             "messages_received": self.messages_received,
             "orders_tracked": self.orders_tracked,
             "pending_orders": len(self._pending_orders),
-            "last_message_age": time.time() - self.last_message_time if self.last_message_time else None,
+            "last_message_age": time.time() - self.last_message_time
+            if self.last_message_time
+            else None,
         }
 
 
@@ -751,7 +772,9 @@ class MarketDataCache:
         self._use_websocket = use_websocket
 
         # Cache token IDs for BTC 5-min markets
-        self._token_cache: dict[int, tuple[str, str]] = {}  # timestamp -> (up_token, down_token)
+        self._token_cache: dict[
+            int, tuple[str, str]
+        ] = {}  # timestamp -> (up_token, down_token)
         self._condition_cache: dict[int, str] = {}  # timestamp -> condition_id
         self._market_cache: dict[int, dict] = {}  # timestamp -> market data
         self._cache_ttl = 60  # seconds
@@ -818,8 +841,7 @@ class MarketDataCache:
         if self._ws and self._ws.is_connected():
             # Use slug as condition_id for BTC markets
             self._ws.subscribe_market(
-                market.slug,
-                [market.up_token_id, market.down_token_id]
+                market.slug, [market.up_token_id, market.down_token_id]
             )
 
         return True
@@ -844,8 +866,14 @@ class MarketDataCache:
             book = self._ws.get_orderbook(token_id)
             if book and book.timestamp > time.time() - 5:  # Max 5s stale
                 return {
-                    "bids": [{"price": str(l.price), "size": str(l.size)} for l in book.bids],
-                    "asks": [{"price": str(l.price), "size": str(l.size)} for l in book.asks],
+                    "bids": [
+                        {"price": str(level.price), "size": str(level.size)}
+                        for level in book.bids
+                    ],
+                    "asks": [
+                        {"price": str(level.price), "size": str(level.size)}
+                        for level in book.asks
+                    ],
                     "source": "websocket",
                     "age_ms": int((time.time() - book.timestamp) * 1000),
                 }
@@ -867,10 +895,14 @@ class MarketDataCache:
         if self._ws and self._ws.is_connected():
             book = self._ws.get_orderbook(token_id)
             if book and book.timestamp > time.time() - 2:  # Max 2s stale for execution
-                return self._ws.get_execution_price(token_id, side, amount_usd, copy_delay_ms)
+                return self._ws.get_execution_price(
+                    token_id, side, amount_usd, copy_delay_ms
+                )
 
         # Fallback to REST
-        return self._rest_client.get_execution_price(token_id, side, amount_usd, copy_delay_ms)
+        return self._rest_client.get_execution_price(
+            token_id, side, amount_usd, copy_delay_ms
+        )
 
     def get_mid(self, token_id: str) -> float | None:
         """Get midpoint price - from WebSocket cache or REST fallback."""

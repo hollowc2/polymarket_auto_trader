@@ -3,7 +3,7 @@
 import json
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from src.config import Config, LOCAL_TZ, TIMEZONE_NAME
@@ -85,7 +85,9 @@ class Trade:
     hour_utc: int | None = None  # Hour of day (0-23) in UTC
     minute_of_hour: int | None = None  # Minute within the hour (0-59)
     day_of_week: int | None = None  # Day of week (0=Monday, 6=Sunday)
-    seconds_into_window: int | None = None  # How many seconds after window opened we entered
+    seconds_into_window: int | None = (
+        None  # How many seconds after window opened we entered
+    )
 
     # Session tracking
     session_trade_number: int | None = None  # Which trade # in this session
@@ -108,7 +110,9 @@ class Trade:
     # Resolution timing
     window_close_time: int | None = None  # When the 5-min window closes (unix)
     resolution_time: int | None = None  # When market actually resolved (unix)
-    resolution_delay_seconds: float | None = None  # Seconds between close and resolution
+    resolution_delay_seconds: float | None = (
+        None  # Seconds between close and resolution
+    )
 
     # Outcome analysis
     price_at_close: float | None = None  # Our direction's price when window closed
@@ -125,7 +129,9 @@ class Trade:
 
     # Settlement status tracking
     settlement_status: str = "pending"  # "pending", "settled", or "force_exit"
-    force_exit_reason: str | None = None  # "insufficient_bankroll" or "shutdown" (only when force_exit)
+    force_exit_reason: str | None = (
+        None  # "insufficient_bankroll" or "shutdown" (only when force_exit)
+    )
 
     # Fields that are only valid during pending state and should not be persisted to JSON
     TRANSIENT_FIELDS = {"current_price", "unrealized_pnl", "implied_outcome"}
@@ -159,7 +165,9 @@ class Trade:
         execution = {
             "timestamp": self.executed_at,
             "entry_price": self.entry_price,
-            "fill_price": self.execution_price if self.execution_price > 0 else self.entry_price,
+            "fill_price": self.execution_price
+            if self.execution_price > 0
+            else self.entry_price,
             "spread": self.spread,
             "slippage_pct": self.slippage_pct,
             "fill_pct": self.fill_pct,
@@ -231,7 +239,9 @@ class Trade:
             "hour_utc": self.hour_utc if self.hour_utc is not None else 0,
             "minute": self.minute_of_hour if self.minute_of_hour is not None else 0,
             "day_of_week": self.day_of_week if self.day_of_week is not None else 0,
-            "seconds_into_window": self.seconds_into_window if self.seconds_into_window is not None else 0,
+            "seconds_into_window": self.seconds_into_window
+            if self.seconds_into_window is not None
+            else 0,
         }
 
         # === ON-CHAIN (reserved for future live trading) ===
@@ -287,21 +297,18 @@ class Trade:
             streak_length=0,  # Not stored in nested format
             confidence=0.6,  # Not stored in nested format
             paper=context.get("mode", "paper") == "paper",
-
             # Resolution fields from settlement
             outcome=settlement.get("outcome"),
             pnl=settlement.get("net_profit", 0.0),
             order_id=None,  # Not stored in nested format for paper
             settled_at=settlement.get("timestamp"),
             won=settlement.get("won"),
-
             # Settlement breakdown
             shares_bought=position.get("shares", 0.0),
             gross_payout=settlement.get("gross_payout", 0.0),
             gross_profit=settlement.get("gross_profit", 0.0),
             fee_amount=settlement.get("fee_amount", fees.get("amount", 0.0)),
             net_profit=settlement.get("net_profit", 0.0),
-
             # Copytrade fields
             copied_from=copytrade.get("wallet") if copytrade else None,
             trader_name=copytrade.get("name") if copytrade else None,
@@ -312,10 +319,8 @@ class Trade:
             executed_at=execution.get("timestamp"),
             copy_delay_ms=copytrade.get("delay_ms") if copytrade else None,
             market_price_at_copy=execution.get("entry_price"),
-
             # Strategy
             strategy=context.get("strategy", "streak"),
-
             # Simulation fields
             fee_rate_bps=fees.get("rate_bps", 0),
             fee_pct=fees.get("pct", 0.0),
@@ -323,28 +328,27 @@ class Trade:
             slippage_pct=execution.get("slippage_pct", 0.0),
             execution_price=execution.get("fill_price", 0.0),
             fill_pct=execution.get("fill_pct", 100.0),
-            delay_impact_pct=copytrade.get("delay_impact_pct", 0.0) if copytrade else 0.0,
-            requested_amount=position.get("requested_amount", position.get("amount", 0.0)),
-
+            delay_impact_pct=copytrade.get("delay_impact_pct", 0.0)
+            if copytrade
+            else 0.0,
+            requested_amount=position.get(
+                "requested_amount", position.get("amount", 0.0)
+            ),
             # Price movement
             price_at_signal=execution.get("entry_price", 0.0),
             price_at_execution=execution.get("fill_price", 0.0),
             price_movement_pct=execution.get("price_movement_pct", 0.0),
-
             # Market context
             market_volume=market.get("volume", 0.0),
             best_bid=execution.get("best_bid", 0.0),
             best_ask=execution.get("best_ask", 0.0),
-
             # Order status -> settlement_status
             order_status="pending",
-
             # Pattern analysis fields
             hour_utc=timing.get("hour_utc", 0),
             minute_of_hour=timing.get("minute", 0),
             day_of_week=timing.get("day_of_week", 0),
             seconds_into_window=timing.get("seconds_into_window", 0),
-
             # Session tracking
             session_trade_number=session.get("trade_number", 1),
             session_wins_before=session.get("wins_before", 0),
@@ -353,28 +357,29 @@ class Trade:
             bankroll_before=session.get("bankroll_before", 0.0),
             consecutive_wins=session.get("consecutive_wins", 0),
             consecutive_losses=session.get("consecutive_losses", 0),
-
             # Market context
             opposite_price=None,
             price_ratio=None,
             market_bias=context.get("market_bias", "neutral"),
-
             # Resolution timing
             window_close_time=market.get("window_close"),
             resolution_time=settlement.get("timestamp"),
             resolution_delay_seconds=settlement.get("resolution_delay_sec"),
             price_at_close=settlement.get("price_at_close"),
-            final_price=1.0 if settlement.get("won") else 0.0 if settlement.get("won") is False else None,
-
+            final_price=1.0
+            if settlement.get("won")
+            else 0.0
+            if settlement.get("won") is False
+            else None,
             # On-chain data
             block_number=on_chain.get("block_number"),
             gas_used=on_chain.get("gas_used"),
             tx_fee_matic=on_chain.get("tx_fee_matic"),
             on_chain_timestamp=on_chain.get("timestamp"),
-
             # Delay model breakdown
-            delay_model_breakdown=copytrade.get("delay_breakdown") if copytrade else None,
-
+            delay_model_breakdown=copytrade.get("delay_breakdown")
+            if copytrade
+            else None,
             # Settlement status
             settlement_status=settlement.get("status", "pending"),
             force_exit_reason=settlement.get("force_exit_reason"),
@@ -382,62 +387,67 @@ class Trade:
 
     def to_history_dict(self) -> dict:
         """Convert trade to a detailed history dictionary."""
-        exec_time = datetime.fromtimestamp(
-            self.executed_at / 1000, tz=LOCAL_TZ
-        ).strftime(f"%Y-%m-%d %H:%M:%S {TIMEZONE_NAME}") if self.executed_at else "N/A"
+        exec_time = (
+            datetime.fromtimestamp(self.executed_at / 1000, tz=LOCAL_TZ).strftime(
+                f"%Y-%m-%d %H:%M:%S {TIMEZONE_NAME}"
+            )
+            if self.executed_at
+            else "N/A"
+        )
 
-        settle_time = datetime.fromtimestamp(
-            self.settled_at / 1000, tz=LOCAL_TZ
-        ).strftime(f"%Y-%m-%d %H:%M:%S {TIMEZONE_NAME}") if self.settled_at else "Pending"
+        settle_time = (
+            datetime.fromtimestamp(self.settled_at / 1000, tz=LOCAL_TZ).strftime(
+                f"%Y-%m-%d %H:%M:%S {TIMEZONE_NAME}"
+            )
+            if self.settled_at
+            else "Pending"
+        )
 
         return {
             # Identification
             "market": self.market_slug,
             "strategy": self.strategy,
             "mode": "PAPER" if self.paper else "LIVE",
-
             # Timing
             "executed_at": exec_time,
             "settled_at": settle_time,
             "copy_delay_ms": self.copy_delay_ms,
-
             # Position
             "direction": self.direction.upper(),
             "requested_amount": round(self.requested_amount, 2),
             "filled_amount": round(self.amount, 2),
             "fill_pct": round(self.fill_pct, 1),
-
             # Prices
             "price_at_signal": round(self.price_at_signal, 4),
             "entry_price": round(self.entry_price, 4),
             "execution_price": round(self.execution_price, 4),
             "price_movement_pct": round(self.price_movement_pct, 2),
-
             # Costs
             "spread_cents": round(self.spread * 100, 1),
             "slippage_pct": round(self.slippage_pct, 2),
             "delay_impact_pct": round(self.delay_impact_pct, 2),
             "fee_pct": round(self.fee_pct * 100, 2),
-
             # Shares
             "shares_bought": round(self.shares_bought, 2),
-
             # Result
             "outcome": self.outcome.upper() if self.outcome else "PENDING",
             "won": self.won,
             "gross_profit": round(self.gross_profit, 2),
             "fee_amount": round(self.fee_amount, 2),
             "net_pnl": round(self.pnl, 2),
-
             # Copytrade specific
             "copied_from": self.trader_name if self.strategy == "copytrade" else None,
             "trader_price": round(self.trader_price, 4) if self.trader_price else None,
-            "trader_amount": round(self.trader_amount, 2) if self.trader_amount else None,
+            "trader_amount": round(self.trader_amount, 2)
+            if self.trader_amount
+            else None,
         }
 
     def summary(self) -> str:
         """Return a one-line summary of the trade."""
-        status = "✓ WON" if self.won else "✗ LOST" if self.won is False else "⏳ PENDING"
+        status = (
+            "✓ WON" if self.won else "✗ LOST" if self.won is False else "⏳ PENDING"
+        )
         return (
             f"{self.direction.upper()} ${self.amount:.2f} @ {self.execution_price:.3f} "
             f"| {status} | PnL: ${self.pnl:+.2f}"
@@ -472,7 +482,10 @@ class TradingState:
         if self.daily_pnl <= -Config.MAX_DAILY_LOSS:
             return False, f"Max daily loss reached (${Config.MAX_DAILY_LOSS})"
         if self.bankroll < Config.MIN_BET:
-            return False, f"Bankroll too low (${self.bankroll:.2f} < ${Config.MIN_BET:.2f})"
+            return (
+                False,
+                f"Bankroll too low (${self.bankroll:.2f} < ${Config.MIN_BET:.2f})",
+            )
         return True, "OK"
 
     def record_trade(self, trade: Trade):
@@ -509,7 +522,9 @@ class TradingState:
                 trade.price_at_close = market.down_price
 
         # Use execution price (includes slippage) if available, else entry_price
-        exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
+        exec_price = (
+            trade.execution_price if trade.execution_price > 0 else trade.entry_price
+        )
 
         # Calculate shares bought
         trade.shares_bought = trade.amount / exec_price if exec_price > 0 else 0
@@ -521,7 +536,9 @@ class TradingState:
 
             # Apply fee to the profit (fee is on proceeds, not principal)
             fee_pct = trade.fee_pct if trade.fee_pct > 0 else 0.0
-            trade.fee_amount = trade.gross_profit * fee_pct if trade.gross_profit > 0 else 0.0
+            trade.fee_amount = (
+                trade.gross_profit * fee_pct if trade.gross_profit > 0 else 0.0
+            )
 
             trade.net_profit = trade.gross_profit - trade.fee_amount
             trade.pnl = trade.net_profit
@@ -551,7 +568,9 @@ class TradingState:
         """Save current state and append new trades to full history."""
         # Save working state (recent trades for fast loading) using nested format
         data = {
-            "trades": [t.to_nested_json() for t in self.trades[-100:]],  # keep last 100 for working state
+            "trades": [
+                t.to_nested_json() for t in self.trades[-100:]
+            ],  # keep last 100 for working state
             "daily_bets": self.daily_bets,
             "daily_pnl": self.daily_pnl,
             "last_reset_date": self.last_reset_date,
@@ -601,7 +620,9 @@ class TradingState:
             json.dump(existing, f, indent=2)
 
         if new_trades:
-            print(f"[history] Appended {len(new_trades)} trade(s) to {history_file} (total: {len(existing)})")
+            print(
+                f"[history] Appended {len(new_trades)} trade(s) to {history_file} (total: {len(existing)})"
+            )
 
     def _update_settled_trades_in_history(self):
         """Update settled trades in the full history file (nested format)."""
@@ -669,7 +690,9 @@ class TradingState:
 
                 # Add force_exit_reason if applicable
                 if settled_trade.settlement_status == "force_exit":
-                    history[i]["settlement"]["force_exit_reason"] = settled_trade.force_exit_reason
+                    history[i]["settlement"]["force_exit_reason"] = (
+                        settled_trade.force_exit_reason
+                    )
 
                 # Update position.shares if it was calculated during settlement
                 if settled_trade.shares_bought > 0:
@@ -682,7 +705,9 @@ class TradingState:
         if updated_count > 0:
             with open(history_file, "w") as f:
                 json.dump(history, f, indent=2)
-            print(f"[history] Updated {updated_count} settled trade(s) in {history_file}")
+            print(
+                f"[history] Updated {updated_count} settled trade(s) in {history_file}"
+            )
 
     def export_history_json(self, filepath: str = "trade_history.json"):
         """Export full trade history to JSON file."""
@@ -719,20 +744,26 @@ class TradingState:
         if update_unrealized:
             self.update_unrealized_pnl()
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"TRADE HISTORY (last {len(trades)} trades) - {TIMEZONE_NAME}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for i, t in enumerate(trades, 1):
-            exec_time = datetime.fromtimestamp(
-                t.executed_at / 1000, tz=LOCAL_TZ
-            ).strftime("%m/%d %H:%M") if t.executed_at else "N/A"
+            exec_time = (
+                datetime.fromtimestamp(t.executed_at / 1000, tz=LOCAL_TZ).strftime(
+                    "%m/%d %H:%M"
+                )
+                if t.executed_at
+                else "N/A"
+            )
 
             status = "✓" if t.won else "✗" if t.won is False else "⏳"
             strategy_icon = "📋" if t.strategy == "copytrade" else "📈"
 
             print(f"\n{i}. {strategy_icon} {exec_time} | {t.market_slug}")
-            print(f"   Position: {t.direction.upper()} ${t.amount:.2f} @ {t.execution_price:.3f}")
+            print(
+                f"   Position: {t.direction.upper()} ${t.amount:.2f} @ {t.execution_price:.3f}"
+            )
 
             # Show costs
             costs = []
@@ -747,30 +778,44 @@ class TradingState:
 
             # Show result
             if t.outcome:
-                print(f"   Result: {status} {t.outcome.upper()} | "
-                      f"Gross: ${t.gross_profit:+.2f} | Fee: ${t.fee_amount:.2f} | "
-                      f"Net: ${t.pnl:+.2f}")
+                print(
+                    f"   Result: {status} {t.outcome.upper()} | "
+                    f"Gross: ${t.gross_profit:+.2f} | Fee: ${t.fee_amount:.2f} | "
+                    f"Net: ${t.pnl:+.2f}"
+                )
             else:
                 # Show unrealized PnL for pending trades
                 if t.unrealized_pnl is not None and t.current_price is not None:
                     # Show if we're likely winning or losing
-                    likely = "LIKELY WIN" if t.direction == t.implied_outcome else "LIKELY LOSS"
-                    print(f"   Result: {status} PENDING | "
-                          f"Price: {t.current_price:.2f} ({likely}) | "
-                          f"Est. PnL: ${t.unrealized_pnl:+.2f}")
+                    likely = (
+                        "LIKELY WIN"
+                        if t.direction == t.implied_outcome
+                        else "LIKELY LOSS"
+                    )
+                    print(
+                        f"   Result: {status} PENDING | "
+                        f"Price: {t.current_price:.2f} ({likely}) | "
+                        f"Est. PnL: ${t.unrealized_pnl:+.2f}"
+                    )
                 else:
                     print(f"   Result: {status} PENDING")
 
             # Copytrade details
             if t.strategy == "copytrade" and t.trader_name:
-                print(f"   Copied: {t.trader_name} (${t.trader_amount:.2f} @ {t.trader_price:.3f}) | "
-                      f"Delay: {t.copy_delay_ms}ms")
+                print(
+                    f"   Copied: {t.trader_name} (${t.trader_amount:.2f} @ {t.trader_price:.3f}) | "
+                    f"Delay: {t.copy_delay_ms}ms"
+                )
 
-        print(f"\n{'='*80}")
-        print(f"SUMMARY")
-        print(f"{'='*80}")
+        print(f"\n{'=' * 80}")
+        print("SUMMARY")
+        print(f"{'=' * 80}")
         realized_pnl = sum(t.pnl for t in trades if t.outcome)
-        unrealized_pnl = sum(t.unrealized_pnl for t in trades if t.outcome is None and t.unrealized_pnl is not None)
+        unrealized_pnl = sum(
+            t.unrealized_pnl
+            for t in trades
+            if t.outcome is None and t.unrealized_pnl is not None
+        )
         total_pnl = realized_pnl + unrealized_pnl
         wins = sum(1 for t in trades if t.won is True)
         losses = sum(1 for t in trades if t.won is False)
@@ -778,14 +823,20 @@ class TradingState:
         pending_count = len(pending_trades)
         total_fees = sum(t.fee_amount for t in trades if t.outcome)
 
-        win_rate_str = f"Win Rate: {wins/(wins+losses)*100:.1f}%" if wins+losses > 0 else "N/A"
+        win_rate_str = (
+            f"Win Rate: {wins / (wins + losses) * 100:.1f}%"
+            if wins + losses > 0
+            else "N/A"
+        )
         print(f"Trades: {wins}W / {losses}L / {pending_count}P | {win_rate_str}")
         print(f"Realized P&L: ${realized_pnl:+.2f} | Fees Paid: ${total_fees:.2f}")
         if pending_count > 0 and unrealized_pnl != 0:
-            print(f"Unrealized P&L: ${unrealized_pnl:+.2f} (from {pending_count} pending)")
+            print(
+                f"Unrealized P&L: ${unrealized_pnl:+.2f} (from {pending_count} pending)"
+            )
             print(f"Total P&L (est): ${total_pnl:+.2f}")
         print(f"Current Bankroll: ${self.bankroll:.2f}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
     def update_unrealized_pnl(self):
         """Update unrealized PnL for all pending trades based on current market prices."""
@@ -806,10 +857,8 @@ class TradingState:
                 # Get current price for our direction
                 if trade.direction == "up":
                     current_price = market.up_price
-                    opposing_price = market.down_price
                 else:
                     current_price = market.down_price
-                    opposing_price = market.up_price
 
                 trade.current_price = current_price
 
@@ -824,7 +873,11 @@ class TradingState:
                 # Calculate unrealized PnL
                 # If we win: receive $1 per share, minus fees
                 # If we lose: lose entire amount
-                exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
+                exec_price = (
+                    trade.execution_price
+                    if trade.execution_price > 0
+                    else trade.entry_price
+                )
                 shares = trade.amount / exec_price if exec_price > 0 else 0
 
                 # Expected value = (prob of win * win payout) + (prob of lose * lose payout)
@@ -838,7 +891,9 @@ class TradingState:
                 net_win = gross_win - fee_on_win
 
                 # Unrealized PnL = expected value
-                trade.unrealized_pnl = (win_prob * net_win) + (lose_prob * (-trade.amount))
+                trade.unrealized_pnl = (win_prob * net_win) + (
+                    lose_prob * (-trade.amount)
+                )
 
             except Exception as e:
                 print(f"[unrealized] Error updating {trade.market_slug}: {e}")
@@ -855,7 +910,9 @@ class TradingState:
         losses = [t for t in settled if not t.won]
 
         realized_pnl = sum(t.pnl for t in settled)
-        unrealized_pnl = sum(t.unrealized_pnl for t in pending if t.unrealized_pnl is not None)
+        unrealized_pnl = sum(
+            t.unrealized_pnl for t in pending if t.unrealized_pnl is not None
+        )
 
         return {
             "total_trades": len(self.trades),
@@ -873,9 +930,16 @@ class TradingState:
             "avg_loss": sum(t.pnl for t in losses) / len(losses) if losses else 0,
             "largest_win": max((t.pnl for t in wins), default=0),
             "largest_loss": min((t.pnl for t in losses), default=0),
-            "avg_slippage_pct": sum(t.slippage_pct for t in settled) / len(settled) if settled else 0,
-            "avg_fee_pct": sum(t.fee_pct for t in settled) / len(settled) * 100 if settled else 0,
-            "avg_delay_impact_pct": sum(t.delay_impact_pct for t in settled) / len(settled) if settled else 0,
+            "avg_slippage_pct": sum(t.slippage_pct for t in settled) / len(settled)
+            if settled
+            else 0,
+            "avg_fee_pct": sum(t.fee_pct for t in settled) / len(settled) * 100
+            if settled
+            else 0,
+            "avg_delay_impact_pct": sum(t.delay_impact_pct for t in settled)
+            / len(settled)
+            if settled
+            else 0,
             "bankroll": self.bankroll,
         }
 
@@ -898,7 +962,7 @@ class TradingState:
                         loaded_trades.append(Trade.from_nested_json(t))
                     else:
                         # Legacy flat format - skip (starting fresh per plan)
-                        print(f"[trader] Skipping old format trade, starting fresh")
+                        print("[trader] Skipping old format trade, starting fresh")
                         continue
                 state.trades = loaded_trades
 
@@ -924,7 +988,9 @@ class TradingState:
                         # Legacy format
                         trade_id = f"{t.get('timestamp')}_{t.get('executed_at')}_{t.get('direction')}"
                     state._saved_trade_ids.add(trade_id)
-                print(f"[history] Loaded {len(state._saved_trade_ids)} trades from history")
+                print(
+                    f"[history] Loaded {len(state._saved_trade_ids)} trades from history"
+                )
             except Exception as e:
                 print(f"[history] Error loading history: {e}")
 
@@ -962,7 +1028,9 @@ class TradingState:
             print("[backfill] No unsettled trades found")
             return 0, 0
 
-        print(f"[backfill] Found {len(unsettled)} unsettled trades, querying markets...")
+        print(
+            f"[backfill] Found {len(unsettled)} unsettled trades, querying markets..."
+        )
 
         client = PolymarketClient()
         updated_count = 0
@@ -995,7 +1063,9 @@ class TradingState:
             outcome = market.outcome
             won = direction == outcome
             amount = position.get("amount", 0)
-            exec_price = execution.get("fill_price") or execution.get("entry_price", 0.5)
+            exec_price = execution.get("fill_price") or execution.get(
+                "entry_price", 0.5
+            )
             fee_pct = fees.get("pct", 0)
 
             shares_bought = amount / exec_price if exec_price > 0 else 0
@@ -1018,7 +1088,9 @@ class TradingState:
                 "won": won,
                 "timestamp": int(time.time() * 1000),
                 "resolution_delay_sec": None,
-                "price_at_close": market.up_price if direction == "up" else market.down_price,
+                "price_at_close": market.up_price
+                if direction == "up"
+                else market.down_price,
                 "gross_payout": gross_payout,
                 "gross_profit": gross_profit,
                 "fee_amount": fee_amount,
@@ -1030,7 +1102,9 @@ class TradingState:
                 history[idx]["position"]["shares"] = shares_bought
 
             emoji = "✓" if won else "✗"
-            print(f"[backfill] {emoji} {market.slug}: {direction.upper()} -> {outcome.upper()} | PnL: ${net_profit:+.2f}")
+            print(
+                f"[backfill] {emoji} {market.slug}: {direction.upper()} -> {outcome.upper()} | PnL: ${net_profit:+.2f}"
+            )
             updated_count += 1
 
         # Save updated history
@@ -1128,7 +1202,7 @@ class PaperTrader:
         execution_price = entry_price if entry_price > 0 else 0.5
         best_bid = 0.0
         best_ask = 0.0
-        market_volume = market.volume if hasattr(market, 'volume') else 0.0
+        market_volume = market.volume if hasattr(market, "volume") else 0.0
 
         # Price at signal (before any processing)
         price_at_signal = entry_price
@@ -1138,16 +1212,22 @@ class PaperTrader:
         precomputed_execution = kwargs.pop("precomputed_execution", None)
 
         # Use fee rate from market data (already fetched from Gamma API)
-        fee_rate_bps = market.taker_fee_bps if hasattr(market, 'taker_fee_bps') else 1000
+        fee_rate_bps = (
+            market.taker_fee_bps if hasattr(market, "taker_fee_bps") else 1000
+        )
         fee_pct = self._client.calculate_fee(execution_price, fee_rate_bps)
 
         # Query orderbook for realistic simulation (or use precomputed data)
         if precomputed_execution:
-            execution_price = precomputed_execution.get("execution_price", execution_price)
+            execution_price = precomputed_execution.get(
+                "execution_price", execution_price
+            )
             spread = precomputed_execution.get("spread", spread)
             slippage_pct = precomputed_execution.get("slippage_pct", slippage_pct)
             fill_pct = precomputed_execution.get("fill_pct", fill_pct)
-            delay_impact_pct = precomputed_execution.get("delay_impact_pct", delay_impact_pct)
+            delay_impact_pct = precomputed_execution.get(
+                "delay_impact_pct", delay_impact_pct
+            )
             delay_breakdown = precomputed_execution.get("delay_breakdown")
             best_bid = precomputed_execution.get("best_bid", best_bid)
             best_ask = precomputed_execution.get("best_ask", best_ask)
@@ -1172,16 +1252,26 @@ class PaperTrader:
                 # Get execution price with slippage and copy delay impact
                 delay_breakdown = None
                 if self._market_cache:
-                    exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown = (
-                        self._market_cache.get_execution_price(
-                            token_id, "BUY", amount, copy_delay_ms
-                        )
+                    (
+                        exec_price,
+                        spread,
+                        slippage_pct,
+                        fill_pct,
+                        delay_impact_pct,
+                        delay_breakdown,
+                    ) = self._market_cache.get_execution_price(
+                        token_id, "BUY", amount, copy_delay_ms
                     )
                 else:
-                    exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown = (
-                        self._client.get_execution_price(
-                            token_id, "BUY", amount, copy_delay_ms
-                        )
+                    (
+                        exec_price,
+                        spread,
+                        slippage_pct,
+                        fill_pct,
+                        delay_impact_pct,
+                        delay_breakdown,
+                    ) = self._client.get_execution_price(
+                        token_id, "BUY", amount, copy_delay_ms
                     )
 
                 if exec_price > 0:
@@ -1194,7 +1284,9 @@ class PaperTrader:
         # Calculate price movement from signal to execution
         price_movement_pct = 0.0
         if price_at_signal > 0:
-            price_movement_pct = ((execution_price - price_at_signal) / price_at_signal) * 100
+            price_movement_pct = (
+                (execution_price - price_at_signal) / price_at_signal
+            ) * 100
 
         # Adjust amount for partial fill
         filled_amount = amount * (fill_pct / 100.0)
@@ -1274,7 +1366,11 @@ class PaperTrader:
         if kwargs.get("strategy") == "copytrade":
             trader = kwargs.get("trader_name", "unknown")
             trader_amt = kwargs.get("trader_amount", 0)
-            delay_info = f" | Delay impact: +{delay_impact_pct:.2f}%" if delay_impact_pct > 0 else ""
+            delay_info = (
+                f" | Delay impact: +{delay_impact_pct:.2f}%"
+                if delay_impact_pct > 0
+                else ""
+            )
             print(
                 f"[PAPER] Copied {trader}: ${filled_amount:.2f} on {direction.upper()} @ {execution_price:.3f} "
                 f"| Trader bet ${trader_amt:.2f} @ {kwargs.get('trader_price', 0):.2f}"
@@ -1318,7 +1414,9 @@ class LiveTrader:
 
         # Validate proxy wallet config
         if Config.SIGNATURE_TYPE == 1 and not Config.FUNDER_ADDRESS:
-            raise ValueError("FUNDER_ADDRESS required for proxy wallet (SIGNATURE_TYPE=1)")
+            raise ValueError(
+                "FUNDER_ADDRESS required for proxy wallet (SIGNATURE_TYPE=1)"
+            )
 
         self._market_cache = market_cache
         self._init_client()
@@ -1341,7 +1439,9 @@ class LiveTrader:
             if Config.SIGNATURE_TYPE == 1:
                 client_kwargs["signature_type"] = 1
                 client_kwargs["funder"] = Config.FUNDER_ADDRESS
-                print(f"[trader] Using proxy wallet with funder: {Config.FUNDER_ADDRESS[:10]}...")
+                print(
+                    f"[trader] Using proxy wallet with funder: {Config.FUNDER_ADDRESS[:10]}..."
+                )
 
             self.client = ClobClient(**client_kwargs)
 
@@ -1360,11 +1460,15 @@ class LiveTrader:
             print(f"[trader] Live trading client initialized ({wallet_type} wallet)")
 
         except ImportError:
-            raise ImportError("py-clob-client not installed. Run: pip install py-clob-client")
+            raise ImportError(
+                "py-clob-client not installed. Run: pip install py-clob-client"
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to init trading client: {e}")
 
-    def _validate_order(self, market: Market, direction: str, amount: float) -> tuple[bool, str]:
+    def _validate_order(
+        self, market: Market, direction: str, amount: float
+    ) -> tuple[bool, str]:
         """Validate order parameters before submission.
 
         Returns:
@@ -1372,7 +1476,10 @@ class LiveTrader:
         """
         # Check minimum order size
         if amount < self.MIN_ORDER_SIZE:
-            return False, f"Order size ${amount:.2f} below minimum ${self.MIN_ORDER_SIZE:.2f}"
+            return (
+                False,
+                f"Order size ${amount:.2f} below minimum ${self.MIN_ORDER_SIZE:.2f}",
+            )
 
         # Check token ID exists
         token_id = market.up_token_id if direction == "up" else market.down_token_id
@@ -1389,7 +1496,9 @@ class LiveTrader:
 
         return True, ""
 
-    def _get_order_status(self, order_id: str, max_attempts: int = 5, poll_interval: float = 0.5) -> dict:
+    def _get_order_status(
+        self, order_id: str, max_attempts: int = 5, poll_interval: float = 0.5
+    ) -> dict:
         """Poll for order status until filled or timeout.
 
         Args:
@@ -1409,7 +1518,9 @@ class LiveTrader:
                 if status in ("FILLED", "MATCHED"):
                     return {
                         "status": "filled",
-                        "filled_size": float(order.get("size_matched", order.get("size", 0))),
+                        "filled_size": float(
+                            order.get("size_matched", order.get("size", 0))
+                        ),
                         "avg_price": float(order.get("price", 0)),
                         "order": order,
                     }
@@ -1477,8 +1588,11 @@ class LiveTrader:
         filled_amount = amount
 
         # Get fee rate from market
-        fee_rate_bps = market.taker_fee_bps if hasattr(market, 'taker_fee_bps') else 1000
+        fee_rate_bps = (
+            market.taker_fee_bps if hasattr(market, "taker_fee_bps") else 1000
+        )
         from src.core.polymarket import PolymarketClient
+
         fee_pct = PolymarketClient.calculate_fee(entry_price, fee_rate_bps)
 
         try:
@@ -1517,11 +1631,15 @@ class LiveTrader:
                 order_status = status_result["status"]
 
                 if order_status == "filled":
-                    filled_amount = status_result["filled_size"] * status_result["avg_price"]
+                    filled_amount = (
+                        status_result["filled_size"] * status_result["avg_price"]
+                    )
                     execution_price = status_result["avg_price"]
-                    print(f"[LIVE] Order filled: {status_result['filled_size']:.2f} shares @ {execution_price:.3f}")
+                    print(
+                        f"[LIVE] Order filled: {status_result['filled_size']:.2f} shares @ {execution_price:.3f}"
+                    )
                 elif order_status == "cancelled":
-                    print(f"[LIVE] Order cancelled (FOK not filled)")
+                    print("[LIVE] Order cancelled (FOK not filled)")
                     return None
                 else:
                     print(f"[LIVE] Order status: {order_status}")
@@ -1533,6 +1651,7 @@ class LiveTrader:
 
             # Categorize the error
             from src.infra.resilience import categorize_error, ErrorCategory
+
             category = categorize_error(e)
             if category == ErrorCategory.FATAL:
                 print(f"[LIVE] Fatal error (not retryable): {e}")

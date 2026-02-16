@@ -22,7 +22,9 @@ class DelayImpactModel:
 
     base_coef: float = field(default_factory=lambda: Config.DELAY_MODEL_BASE_COEF)
     max_impact: float = field(default_factory=lambda: Config.DELAY_MODEL_MAX_IMPACT)
-    baseline_spread: float = field(default_factory=lambda: Config.DELAY_MODEL_BASELINE_SPREAD)
+    baseline_spread: float = field(
+        default_factory=lambda: Config.DELAY_MODEL_BASELINE_SPREAD
+    )
 
     def calculate_impact(
         self,
@@ -144,11 +146,13 @@ class PolymarketClient:
         )
         self.session.mount("https://", adapter)
 
-        self.session.headers.update({
-            "User-Agent": "PolymarketBot/2.0",
-            "Accept": "application/json",
-            "Connection": "keep-alive",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "PolymarketBot/2.0",
+                "Accept": "application/json",
+                "Connection": "keep-alive",
+            }
+        )
 
         # Token ID cache for BTC 5-min markets: timestamp -> (up_token, down_token)
         self._token_cache: dict[int, tuple[str | None, str | None]] = {}
@@ -231,7 +235,9 @@ class PolymarketClient:
                 taker_fee_bps = 1000
                 # Only log once per market
                 if timestamp not in self._token_cache:
-                    print(f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps")
+                    print(
+                        f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps"
+                    )
             else:
                 taker_fee_bps = int(taker_fee_bps)
 
@@ -379,7 +385,9 @@ class PolymarketClient:
         """
         try:
             resp = self.session.get(
-                f"{self.clob}/midpoint", params={"token_id": token_id}, timeout=self.timeout
+                f"{self.clob}/midpoint",
+                params={"token_id": token_id},
+                timeout=self.timeout,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -435,7 +443,9 @@ class PolymarketClient:
         DEFAULT_FEE_BPS = 1000  # Fallback: 10% base rate (typical Polymarket fee)
         try:
             resp = self.session.get(
-                f"{self.clob}/fee-rate", params={"token_id": token_id}, timeout=self.timeout
+                f"{self.clob}/fee-rate",
+                params={"token_id": token_id},
+                timeout=self.timeout,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -443,7 +453,9 @@ class PolymarketClient:
         except requests.exceptions.Timeout:
             return DEFAULT_FEE_BPS
         except Exception as e:
-            print(f"[polymarket] Error fetching fee rate: {e}, using default {DEFAULT_FEE_BPS} bps")
+            print(
+                f"[polymarket] Error fetching fee rate: {e}, using default {DEFAULT_FEE_BPS} bps"
+            )
             return DEFAULT_FEE_BPS
 
     @staticmethod
@@ -544,9 +556,13 @@ class PolymarketClient:
 
         # Calculate slippage vs best price
         if side == "BUY":
-            slippage_pct = (execution_price - best_ask) / best_ask * 100 if best_ask > 0 else 0
+            slippage_pct = (
+                (execution_price - best_ask) / best_ask * 100 if best_ask > 0 else 0
+            )
         else:
-            slippage_pct = (best_bid - execution_price) / best_bid * 100 if best_bid > 0 else 0
+            slippage_pct = (
+                (best_bid - execution_price) / best_bid * 100 if best_bid > 0 else 0
+            )
 
         # Calculate copy delay price impact using the improved model
         delay_impact_pct = 0.0
@@ -564,11 +580,18 @@ class PolymarketClient:
 
             # Apply delay impact to execution price
             if side == "BUY":
-                execution_price *= (1 + delay_impact_pct / 100)
+                execution_price *= 1 + delay_impact_pct / 100
             else:
-                execution_price *= (1 - delay_impact_pct / 100)
+                execution_price *= 1 - delay_impact_pct / 100
 
             # Cap execution price at reasonable bounds
             execution_price = max(0.01, min(0.99, execution_price))
 
-        return (execution_price, spread, max(0, slippage_pct), fill_pct, delay_impact_pct, delay_breakdown)
+        return (
+            execution_price,
+            spread,
+            max(0, slippage_pct),
+            fill_pct,
+            delay_impact_pct,
+            delay_breakdown,
+        )

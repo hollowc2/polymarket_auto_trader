@@ -7,7 +7,6 @@ Monitors BTC 5-min markets on Polymarket and bets against streaks.
 
 import argparse
 import signal
-import sys
 import time
 from datetime import datetime
 
@@ -51,7 +50,7 @@ Environment Variables (.env):
   PRIVATE_KEY        Polygon wallet private key (required for live)
 
 Current Configuration:
-  Mode:              {'PAPER' if Config.PAPER_TRADE else 'LIVE'}
+  Mode:              {"PAPER" if Config.PAPER_TRADE else "LIVE"}
   Streak Trigger:    {Config.STREAK_TRIGGER}
   Bet Amount:        ${Config.BET_AMOUNT}
   Min Bet:           ${Config.MIN_BET}
@@ -71,35 +70,47 @@ Related Commands:
   python history.py --stats                # View trading statistics
   python history.py --export csv           # Export trade history
   python copybot.py --help                 # Copytrade bot help
-"""
+""",
     )
     parser.add_argument(
-        "--paper", action="store_true",
-        help=f"Force paper trading mode (current: {Config.PAPER_TRADE})"
+        "--paper",
+        action="store_true",
+        help=f"Force paper trading mode (current: {Config.PAPER_TRADE})",
     )
     parser.add_argument(
-        "--live", action="store_true",
-        help="Force live trading mode (requires PRIVATE_KEY)"
+        "--live",
+        action="store_true",
+        help="Force live trading mode (requires PRIVATE_KEY)",
     )
     parser.add_argument(
-        "--trigger", type=int, metavar="N",
-        help=f"Streak length to trigger bet (default: {Config.STREAK_TRIGGER})"
+        "--trigger",
+        type=int,
+        metavar="N",
+        help=f"Streak length to trigger bet (default: {Config.STREAK_TRIGGER})",
     )
     parser.add_argument(
-        "--amount", type=float, metavar="USD",
-        help=f"Bet amount in USD (default: {Config.BET_AMOUNT})"
+        "--amount",
+        type=float,
+        metavar="USD",
+        help=f"Bet amount in USD (default: {Config.BET_AMOUNT})",
     )
     parser.add_argument(
-        "--bankroll", type=float, metavar="USD",
-        help="Set starting bankroll (overrides saved state)"
+        "--bankroll",
+        type=float,
+        metavar="USD",
+        help="Set starting bankroll (overrides saved state)",
     )
     parser.add_argument(
-        "--max-bets", type=int, metavar="N",
-        help=f"Maximum daily bets (default: {Config.MAX_DAILY_BETS})"
+        "--max-bets",
+        type=int,
+        metavar="N",
+        help=f"Maximum daily bets (default: {Config.MAX_DAILY_BETS})",
     )
     parser.add_argument(
-        "--max-loss", type=float, metavar="USD",
-        help=f"Stop after this daily loss (default: {Config.MAX_DAILY_LOSS})"
+        "--max-loss",
+        type=float,
+        metavar="USD",
+        help=f"Stop after this daily loss (default: {Config.MAX_DAILY_LOSS})",
     )
     args = parser.parse_args()
 
@@ -129,13 +140,17 @@ Related Commands:
         trader = LiveTrader()
         log("LIVE trading mode - Real money!")
 
-    log(f"Config: trigger={trigger}, amount=${bet_amount}, bankroll=${state.bankroll:.2f}")
+    log(
+        f"Config: trigger={trigger}, amount=${bet_amount}, bankroll=${state.bankroll:.2f}"
+    )
     log(f"Limits: max_bets={max_daily_bets}/day, max_loss=${max_daily_loss}")
     log(f"Timezone: {TIMEZONE_NAME}")
 
     log(f"Strategy: streak trigger={trigger}, bet=${bet_amount:.2f}")
     log(f"Bankroll: ${state.bankroll:.2f}")
-    log(f"Limits: max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day")
+    log(
+        f"Limits: max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day"
+    )
     log("")
 
     # Track what we've already bet on
@@ -157,7 +172,11 @@ Related Commands:
                     state.settle_trade(trade, market.outcome)
                     emoji = "✓" if trade.pnl > 0 else "✗"
                     won = trade.direction == market.outcome
-                    fee_info = f" (fee: {trade.fee_pct:.2%})" if won and trade.fee_pct > 0 else ""
+                    fee_info = (
+                        f" (fee: {trade.fee_pct:.2%})"
+                        if won and trade.fee_pct > 0
+                        else ""
+                    )
                     log(
                         f"[{emoji}] Settled: {trade.direction.upper()} @ {trade.execution_price:.3f} "
                         f"-> {market.outcome.upper()} | PnL: ${trade.pnl:+.2f}{fee_info} "
