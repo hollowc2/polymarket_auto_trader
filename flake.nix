@@ -16,6 +16,7 @@
             python313
             uv
             ruff
+            ty
             prek
           ];
           shellHook = ''
