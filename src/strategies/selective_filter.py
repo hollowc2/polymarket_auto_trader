@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """Selective trade quality filter for copytrade signals."""
 
 from __future__ import annotations

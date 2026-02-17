@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """WebSocket client for real-time Polymarket data feeds.
 
 Provides ~100ms latency vs ~1s for REST API polling.

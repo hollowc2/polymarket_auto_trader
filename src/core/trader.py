@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """Trading execution — paper and live modes."""
 
 import json

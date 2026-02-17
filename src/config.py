@@ -1,5 +1,6 @@
 import os
-from datetime import timezone, timedelta
+from datetime import timedelta, timezone
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -49,9 +50,7 @@ class Config:
 
     # Copytrade
     DATA_API = "https://data-api.polymarket.com"
-    COPY_WALLETS: list[str] = [
-        w.strip() for w in os.getenv("COPY_WALLETS", "").split(",") if w.strip()
-    ]
+    COPY_WALLETS: list[str] = [w.strip() for w in os.getenv("COPY_WALLETS", "").split(",") if w.strip()]
     COPY_POLL_INTERVAL: int = int(os.getenv("COPY_POLL_INTERVAL", "5"))
 
     # WebSocket settings

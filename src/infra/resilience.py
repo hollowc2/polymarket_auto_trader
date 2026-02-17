@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """Resilience patterns for production-grade API interactions.
 
 Provides:

@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """Polymarket API client for reading market data and placing trades."""
 
 import json

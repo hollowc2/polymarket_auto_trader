@@ -1,0 +1,12 @@
+[project]
+name = "example-polymarket-strategy"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["pandas>=3.0.0", "polymarket-algo-core"]
+
+[project.entry-points."polymarket_algo.strategies"]
+rsi_reversal = "example_strategy.rsi_reversal:RSIReversalStrategy"
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"

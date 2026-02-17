@@ -40,9 +40,7 @@ class CopytradeMonitor:
     def __init__(self, wallets: list[str] | None = None):
         self.wallets = wallets or Config.COPY_WALLETS
         self.session = requests.Session()
-        self.session.headers.update(
-            {"User-Agent": "PolymarketCopyBot/1.0", "Accept": "application/json"}
-        )
+        self.session.headers.update({"User-Agent": "PolymarketCopyBot/1.0", "Accept": "application/json"})
         # Track last seen timestamp per wallet to detect new trades
         self.last_seen: dict[str, int] = {w: int(time.time()) for w in self.wallets}
 

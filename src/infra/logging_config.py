@@ -1,3 +1,4 @@
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """Structured logging configuration for production use.
 
 Provides consistent, parseable log output with key metrics and colors.

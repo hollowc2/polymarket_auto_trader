@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DEPRECATED: Use polymarket_algo.* packages instead. This file exists for backward compatibility.
 """
 Polymarket BTC 5-Min Streak Reversal Bot
 

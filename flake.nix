@@ -19,6 +19,12 @@
             ty
             prek
           ];
+
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.stdenv.cc.cc.lib
+            pkgs.zlib
+          ];
+
           shellHook = ''
             # Auto-create venv if it doesn't exist
             if [ ! -d .venv ]; then
@@ -31,6 +37,9 @@
             export PATH="${pkgs.lib.makeBinPath (with pkgs; [ ruff ty prek ])}:$PATH"
 
             echo "Python $(python --version) | uv $(uv --version) | ruff $(ruff version)"
+
+            # Keep workspace dependencies in sync
+            uv sync --all-packages >/dev/null 2>&1 || true
 
             # Install pre-commit hooks via prek
             prek install >/dev/null 2>&1 || true
