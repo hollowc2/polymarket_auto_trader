@@ -15,6 +15,9 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs = avg_gain / avg_loss.replace(0, pd.NA)
     rsi_values = 100 - (100 / (1 + rs))
 
+    both_flat = (avg_gain == 0) & (avg_loss == 0)
+    rsi_values = rsi_values.where(~both_flat, 50.0)
+
     # Handle edge case when avg_loss is exactly zero => RSI=100
     rsi_values = rsi_values.fillna(100)
     return rsi_values
