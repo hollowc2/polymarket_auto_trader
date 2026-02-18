@@ -7,4 +7,5 @@ from .plugin import discover_strategies as discover_strategies
 from .plugin import load_local_plugins as load_local_plugins
 from .types import DataFeed as DataFeed
 from .types import Indicator as Indicator
+from .types import PriceTick as PriceTick
 from .types import Strategy as Strategy
