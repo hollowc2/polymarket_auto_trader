@@ -1,48 +1,59 @@
-# AGENTS.md — Polymarket Streak Bot
+# AGENTS.md — Polymarket Trading Toolkit
 
 ## Project
-Python bot for trading BTC 5-min up/down prediction markets on Polymarket. Three strategies: streak reversal (mean reversion), copytrade (wallet copying), and selective copytrade (filtered).
+Composable Python toolkit for backtesting and live execution on Polymarket prediction markets. Plugin-based strategies and indicators, multi-source data feeds.
 
 ## Stack
-- Python 3.13, uv (package manager)
-- Nix flake devshell (`nix develop`)
-- py-clob-client, web3, websockets, requests
-- Ruff (linter), ty (type checker), prek (pre-commit hooks)
+- Python 3.13, uv workspaces (monorepo)
+- Nix flake devshell (`nix develop`) — optional, uv-only works too
+- py-clob-client, web3, websockets, pandas, numpy
+- Ruff (lint), ty (typecheck), pytest, prek (git hooks)
 
 ## Structure
 ```
-bot.py / copybot_v2.py          # Entrypoints (streak / copytrade)
-src/config.py                   # Settings from .env
-src/strategies/                 # Strategy logic (streak, copytrade, filters)
-src/core/                       # API clients (REST, WebSocket, blockchain, trader)
-src/infra/                      # Cross-cutting (resilience, logging)
-scripts/                        # Backtest, history analysis
-docs/                           # Detailed docs (architecture, decisions, conventions)
+packages/
+  core/         → Protocol types (Strategy, Indicator, DataFeed, PriceTick), config, plugin registry
+  data/         → Binance OHLCV fetcher + storage (CSV/Parquet)
+  indicators/   → EMA, SMA, RSI, MACD, Bollinger Bands
+  strategies/   → Streak reversal, copytrade, candle direction, selective filter
+  backtest/     → Engine + parameter sweep + walk-forward + metrics
+  executor/     → Polymarket CLOB client, WebSocket, trader, blockchain, resilience
+scripts/        → CLI entry points
+examples/       → Custom strategy plugin example
+docs/           → Architecture, conventions, decisions
 ```
 
 ## Development
 ```bash
-nix develop                              # Enter devshell
-uv sync                                  # Install deps
-uv run python bot.py --paper             # Streak strategy (paper)
-uv run python copybot_v2.py --paper      # Copytrade (paper)
-uv run python scripts/backtest.py        # Backtest
+# Nix users
+nix develop                     # auto: uv sync, prek install
+
+# Non-Nix users
+uv sync --all-packages          # install all workspace packages
+prek install                    # install git hooks
+
+# Run
+uv run python scripts/bot.py --paper
+uv run python scripts/backtest.py
+uv run pytest -v
 ```
 
 ## Docs
-- `docs/ARCHITECTURE.md` — system design, data flow, API surface
+- `docs/ARCHITECTURE.md` — system design, package layering, data flow, DataFeed protocol
 - `docs/CONVENTIONS.md` — code patterns, naming, module boundaries
 - `docs/DECISIONS.md` — architecture decision records
 
 ## Verification
 ```bash
-ruff check .                    # Lint
-ruff format --check .           # Format check
-ty check                        # Type check
+ruff check packages/ tests/     # Lint
+ruff format --check packages/   # Format
+ty check                        # Typecheck
+uv run pytest -v                # Tests
 ```
 
 ## Rules
 - Paper trade first (`--paper`). Never default to live.
 - All config via `.env` — no hardcoded keys or amounts.
-- Entrypoints (`bot.py`, `copybot_v2.py`) stay thin — logic lives in `src/`.
+- New strategies must conform to `Strategy` Protocol (see `packages/core/`).
+- New data feeds must conform to `DataFeed` Protocol.
 - REST fallback for every WebSocket path (graceful degradation).

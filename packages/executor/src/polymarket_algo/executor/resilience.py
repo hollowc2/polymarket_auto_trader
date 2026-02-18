@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TypeVar
 
-from config import Config
+from polymarket_algo.core.config import Config
 
 
 class CircuitState(Enum):

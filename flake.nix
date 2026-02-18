@@ -15,9 +15,9 @@
           packages = with pkgs; [
             python313
             uv
+            prek
             ruff
             ty
-            prek
           ];
 
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
@@ -32,8 +32,10 @@
               uv venv
             fi
 
-            # Activate venv for Python deps, then restore Nix tool priority
+            # Activate venv for Python deps
             source .venv/bin/activate
+
+            # Prioritize Nix tools over venv binaries
             export PATH="${pkgs.lib.makeBinPath (with pkgs; [ ruff ty prek ])}:$PATH"
 
             echo "Python $(python --version) | uv $(uv --version) | ruff $(ruff version)"
