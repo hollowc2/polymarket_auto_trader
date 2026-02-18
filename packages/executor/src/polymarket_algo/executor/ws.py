@@ -154,13 +154,19 @@ class PolymarketWebSocket:
     WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     USER_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
 
-    def __init__(self, on_trade: Callable[[TradeEvent], None] | None = None):
+    def __init__(
+        self,
+        on_trade: Callable[[TradeEvent], None] | None = None,
+        on_mid_change: Callable[[str, float], None] | None = None,
+    ):
         """Initialize WebSocket client.
 
         Args:
             on_trade: Callback for trade events (called from asyncio thread)
+            on_mid_change: Callback for orderbook midpoint changes (token_id, mid_price)
         """
         self._on_trade = on_trade
+        self._on_mid_change = on_mid_change
         self._orderbooks: dict[str, CachedOrderBook] = {}
         self._subscribed_tokens: set[str] = set()
         self._subscribed_markets: set[str] = set()  # condition IDs
@@ -332,8 +338,13 @@ class PolymarketWebSocket:
             # Orderbook delta
             token_id = data.get("asset_id", "")
             if token_id and token_id in self._orderbooks:
+                mid_price: float | None = None
                 with self._lock:
                     self._orderbooks[token_id].update_from_delta(data)
+                    mid_price = self._orderbooks[token_id].mid
+
+                if self._on_mid_change and mid_price is not None:
+                    self._on_mid_change(token_id, mid_price)
 
         elif msg_type == "last_trade_price":
             # Trade event
@@ -448,6 +459,10 @@ class PolymarketWebSocket:
         if book and book.timestamp > 0:
             return book.mid
         return None
+
+    def set_mid_change_callback(self, callback: Callable[[str, float], None] | None):
+        """Set callback for orderbook midpoint updates."""
+        self._on_mid_change = callback
 
     def is_connected(self) -> bool:
         """Check if WebSocket is connected."""
@@ -632,9 +647,6 @@ class UserWebSocket:
         """Send authentication message."""
         if not self._ws:
             return
-
-        # Generate timestamp for signature
-        int(time.time())
 
         # Create authentication message
         auth_msg = {
