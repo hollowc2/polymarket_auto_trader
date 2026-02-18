@@ -15,8 +15,6 @@
           packages = with pkgs; [
             python313
             uv
-            ruff
-            ty
             prek
           ];
 
@@ -32,11 +30,10 @@
               uv venv
             fi
 
-            # Activate venv for Python deps, then restore Nix tool priority
+            # Activate venv for Python deps
             source .venv/bin/activate
-            export PATH="${pkgs.lib.makeBinPath (with pkgs; [ ruff ty prek ])}:$PATH"
 
-            echo "Python $(python --version) | uv $(uv --version) | ruff $(ruff version)"
+            echo "Python $(python --version) | uv $(uv --version)"
 
             # Keep workspace dependencies in sync
             uv sync --all-packages >/dev/null 2>&1 || true
