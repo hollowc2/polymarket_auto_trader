@@ -14,8 +14,8 @@ from dataclasses import dataclass
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from src.core.blockchain import PolygonscanClient
 from src.config import Config
+from src.core.blockchain import PolygonscanClient
 from src.strategies.copytrade import CopySignal
 
 
@@ -142,9 +142,7 @@ class CopytradeWebSocket:
                     # Handle messages
                     async for message in ws:
                         raw_message = (
-                            message.decode("utf-8", errors="ignore")
-                            if isinstance(message, bytes)
-                            else message
+                            message.decode("utf-8", errors="ignore") if isinstance(message, bytes) else message
                         )
                         await self._handle_message(raw_message)
 
@@ -234,9 +232,7 @@ class CopytradeWebSocket:
             "wallets_monitored": len(self.wallets),
             "signals_emitted": self.signals_emitted,
             "reconnect_count": self.reconnect_count,
-            "last_signal_age": time.time() - self.last_signal_time
-            if self.last_signal_time
-            else None,
+            "last_signal_age": time.time() - self.last_signal_time if self.last_signal_time else None,
         }
 
 
@@ -313,9 +309,7 @@ class HybridCopytradeMonitor:
         """Register a signal callback."""
         self._callbacks.append(callback)
 
-    def trigger_immediate_poll(
-        self, market_slug: str | None = None
-    ) -> list[CopySignal]:
+    def trigger_immediate_poll(self, market_slug: str | None = None) -> list[CopySignal]:
         """Immediately poll when WebSocket detects market activity.
 
         Called when a trade is detected on a BTC 5-min market via WebSocket.

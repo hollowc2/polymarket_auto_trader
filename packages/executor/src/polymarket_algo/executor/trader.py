@@ -6,8 +6,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from config import LOCAL_TZ, TIMEZONE_NAME, Config
 from polymarket import Market
+
+from config import LOCAL_TZ, TIMEZONE_NAME, Config
 
 
 @dataclass

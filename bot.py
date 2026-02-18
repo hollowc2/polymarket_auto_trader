@@ -11,10 +11,10 @@ import signal
 import time
 from datetime import datetime
 
-from src.config import Config, LOCAL_TZ, TIMEZONE_NAME
+from src.config import LOCAL_TZ, TIMEZONE_NAME, Config
 from src.core.polymarket import PolymarketClient
-from src.strategies.streak import evaluate, kelly_size
 from src.core.trader import LiveTrader, PaperTrader, TradingState
+from src.strategies.streak import evaluate, kelly_size
 
 running = True
 
@@ -141,17 +141,13 @@ Related Commands:
         trader = LiveTrader()
         log("LIVE trading mode - Real money!")
 
-    log(
-        f"Config: trigger={trigger}, amount=${bet_amount}, bankroll=${state.bankroll:.2f}"
-    )
+    log(f"Config: trigger={trigger}, amount=${bet_amount}, bankroll=${state.bankroll:.2f}")
     log(f"Limits: max_bets={max_daily_bets}/day, max_loss=${max_daily_loss}")
     log(f"Timezone: {TIMEZONE_NAME}")
 
     log(f"Strategy: streak trigger={trigger}, bet=${bet_amount:.2f}")
     log(f"Bankroll: ${state.bankroll:.2f}")
-    log(
-        f"Limits: max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day"
-    )
+    log(f"Limits: max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day")
     log("")
 
     # Track what we've already bet on
@@ -173,11 +169,7 @@ Related Commands:
                     state.settle_trade(trade, market.outcome)
                     emoji = "✓" if trade.pnl > 0 else "✗"
                     won = trade.direction == market.outcome
-                    fee_info = (
-                        f" (fee: {trade.fee_pct:.2%})"
-                        if won and trade.fee_pct > 0
-                        else ""
-                    )
+                    fee_info = f" (fee: {trade.fee_pct:.2%})" if won and trade.fee_pct > 0 else ""
                     log(
                         f"[{emoji}] Settled: {trade.direction.upper()} @ {trade.execution_price:.3f} "
                         f"-> {market.outcome.upper()} | PnL: ${trade.pnl:+.2f}{fee_info} "
@@ -250,9 +242,7 @@ Related Commands:
                 continue
 
             # === CALCULATE BET SIZE ===
-            entry_price = (
-                market.up_price if sig.direction == "up" else market.down_price
-            )
+            entry_price = market.up_price if sig.direction == "up" else market.down_price
             if entry_price <= 0:
                 entry_price = 0.5
 

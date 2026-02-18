@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
-from src.config import Config, LOCAL_TZ
+from src.config import LOCAL_TZ, Config
 
 
 # ANSI color codes
@@ -64,9 +64,7 @@ class StructuredLogger:
         "CRITICAL": (Colors.BG_RED + Colors.WHITE, "☠"),
     }
 
-    def __init__(
-        self, name: str = "copybot", level: str | None = None, use_colors: bool = True
-    ):
+    def __init__(self, name: str = "copybot", level: str | None = None, use_colors: bool = True):
         """Initialize logger.
 
         Args:
@@ -254,16 +252,10 @@ class StructuredLogger:
 
         copy_icon = self._c(Colors.MAGENTA + Colors.BOLD, "📋 COPY")
         trader_str = self._c(Colors.CYAN, trader)
-        direction_str = self._c(
-            Colors.GREEN if direction.lower() == "up" else Colors.RED, direction.upper()
-        )
+        direction_str = self._c(Colors.GREEN if direction.lower() == "up" else Colors.RED, direction.upper())
 
         delay_sec = delay_ms / 1000
-        delay_color = (
-            Colors.GREEN
-            if delay_sec < 5
-            else (Colors.YELLOW if delay_sec < 15 else Colors.RED)
-        )
+        delay_color = Colors.GREEN if delay_sec < 5 else (Colors.YELLOW if delay_sec < 15 else Colors.RED)
         delay_str = self._c(delay_color, f"{delay_sec:.1f}s")
 
         line = f"{ts_str} {copy_icon} {trader_str}: {direction_str} @ {price:.2f} (${amount:.0f}) → ${our_amount:.2f} | Delay: {delay_str}"
@@ -306,9 +298,7 @@ class StructuredLogger:
         ts_str = self._c(Colors.DIM, f"[{ts}]")
 
         # Heartbeat symbol
-        ws_status = (
-            self._c(Colors.GREEN, "●") if ws_connected else self._c(Colors.YELLOW, "○")
-        )
+        ws_status = self._c(Colors.GREEN, "●") if ws_connected else self._c(Colors.YELLOW, "○")
 
         total = wins + losses
         if total > 0:

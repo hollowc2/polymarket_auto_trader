@@ -23,9 +23,7 @@ class DelayImpactModel:
 
     base_coef: float = field(default_factory=lambda: Config.DELAY_MODEL_BASE_COEF)
     max_impact: float = field(default_factory=lambda: Config.DELAY_MODEL_MAX_IMPACT)
-    baseline_spread: float = field(
-        default_factory=lambda: Config.DELAY_MODEL_BASELINE_SPREAD
-    )
+    baseline_spread: float = field(default_factory=lambda: Config.DELAY_MODEL_BASELINE_SPREAD)
 
     def calculate_impact(
         self,
@@ -187,9 +185,7 @@ class PolymarketClient:
 
         slug = f"btc-updown-5m-{timestamp}"
         try:
-            resp = self.session.get(
-                f"{self.gamma}/events", params={"slug": slug}, timeout=self.timeout
-            )
+            resp = self.session.get(f"{self.gamma}/events", params={"slug": slug}, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
             if not data:
@@ -236,9 +232,7 @@ class PolymarketClient:
                 taker_fee_bps = 1000
                 # Only log once per market
                 if timestamp not in self._token_cache:
-                    print(
-                        f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps"
-                    )
+                    print(f"[polymarket] No takerBaseFee in response for {slug}, using default {taker_fee_bps} bps")
             else:
                 taker_fee_bps = int(taker_fee_bps)
 
@@ -342,9 +336,7 @@ class PolymarketClient:
     def get_orderbook(self, token_id: str) -> dict:
         """Get order book for a token."""
         try:
-            resp = self.session.get(
-                f"{self.clob}/book", params={"token_id": token_id}, timeout=self.timeout
-            )
+            resp = self.session.get(f"{self.clob}/book", params={"token_id": token_id}, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -454,9 +446,7 @@ class PolymarketClient:
         except requests.exceptions.Timeout:
             return DEFAULT_FEE_BPS
         except Exception as e:
-            print(
-                f"[polymarket] Error fetching fee rate: {e}, using default {DEFAULT_FEE_BPS} bps"
-            )
+            print(f"[polymarket] Error fetching fee rate: {e}, using default {DEFAULT_FEE_BPS} bps")
             return DEFAULT_FEE_BPS
 
     @staticmethod
@@ -557,13 +547,9 @@ class PolymarketClient:
 
         # Calculate slippage vs best price
         if side == "BUY":
-            slippage_pct = (
-                (execution_price - best_ask) / best_ask * 100 if best_ask > 0 else 0
-            )
+            slippage_pct = (execution_price - best_ask) / best_ask * 100 if best_ask > 0 else 0
         else:
-            slippage_pct = (
-                (best_bid - execution_price) / best_bid * 100 if best_bid > 0 else 0
-            )
+            slippage_pct = (best_bid - execution_price) / best_bid * 100 if best_bid > 0 else 0
 
         # Calculate copy delay price impact using the improved model
         delay_impact_pct = 0.0

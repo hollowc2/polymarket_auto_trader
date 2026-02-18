@@ -18,6 +18,7 @@ Usage:
 import argparse
 import time
 from datetime import datetime
+
 from src.config import TIMEZONE_NAME
 from src.core.trader import TradingState
 
@@ -25,13 +26,9 @@ from src.core.trader import TradingState
 def main():
     parser = argparse.ArgumentParser(description="Trade History Viewer")
     parser.add_argument("--all", action="store_true", help="Show all trades")
-    parser.add_argument(
-        "--limit", type=int, default=20, help="Number of trades to show"
-    )
+    parser.add_argument("--limit", type=int, default=20, help="Number of trades to show")
     parser.add_argument("--stats", action="store_true", help="Show statistics only")
-    parser.add_argument(
-        "--export", choices=["json", "csv"], help="Export history to file"
-    )
+    parser.add_argument("--export", choices=["json", "csv"], help="Export history to file")
     parser.add_argument("--output", type=str, help="Output file path for export")
     parser.add_argument(
         "--recent",
@@ -68,9 +65,7 @@ def main():
             if remaining == 0:
                 # All trades settled
                 if total_updated > 0:
-                    print(
-                        f"\nDone! Updated {total_updated} trades. Run 'python history.py --stats' to see results."
-                    )
+                    print(f"\nDone! Updated {total_updated} trades. Run 'python history.py --stats' to see results.")
                 else:
                     print("\nNo trades needed updating.")
                 break
@@ -78,16 +73,12 @@ def main():
             if not args.watch:
                 # Not watching, just report and exit
                 print(f"\n{remaining} trade(s) still pending settlement.")
-                print(
-                    f"Run with --watch to keep retrying every {args.interval // 60} minutes."
-                )
+                print(f"Run with --watch to keep retrying every {args.interval // 60} minutes.")
                 break
 
             # Watch mode: wait and retry
             next_check = datetime.now().strftime("%H:%M:%S")
-            print(
-                f"\n[{next_check}] {remaining} trade(s) still pending. Retrying in {args.interval // 60} min..."
-            )
+            print(f"\n[{next_check}] {remaining} trade(s) still pending. Retrying in {args.interval // 60} min...")
             try:
                 time.sleep(args.interval)
             except KeyboardInterrupt:
@@ -135,9 +126,7 @@ def main():
         print("\nProfit & Loss:")
         print(f"  Realized P&L:    ${stats['realized_pnl']:+.2f}")
         if stats["pending_trades"] > 0:
-            print(
-                f"  Unrealized P&L:  ${stats['unrealized_pnl']:+.2f} ({stats['pending_trades']} pending)"
-            )
+            print(f"  Unrealized P&L:  ${stats['unrealized_pnl']:+.2f} ({stats['pending_trades']} pending)")
             print(f"  Total P&L (est): ${stats['total_pnl']:+.2f}")
         print(f"  Gross Profit:    ${stats['total_gross_profit']:+.2f}")
         print(f"  Fees Paid:       ${stats['total_fees_paid']:.2f}")

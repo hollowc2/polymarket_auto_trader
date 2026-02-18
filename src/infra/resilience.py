@@ -7,12 +7,12 @@ Provides:
 - HealthCheck: Monitors system health state
 """
 
-import time
 import threading
+import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, TypeVar
 
 from src.config import Config
 
@@ -50,12 +50,8 @@ class CircuitBreaker:
     """
 
     name: str
-    failure_threshold: int = field(
-        default_factory=lambda: Config.CIRCUIT_BREAKER_THRESHOLD
-    )
-    recovery_time: int = field(
-        default_factory=lambda: Config.CIRCUIT_BREAKER_RECOVERY_TIME
-    )
+    failure_threshold: int = field(default_factory=lambda: Config.CIRCUIT_BREAKER_THRESHOLD)
+    recovery_time: int = field(default_factory=lambda: Config.CIRCUIT_BREAKER_RECOVERY_TIME)
     half_open_max_calls: int = 3
 
     # Internal state
@@ -172,9 +168,7 @@ class CircuitBreaker:
             "total_blocked": self.total_blocked,
             "failure_threshold": self.failure_threshold,
             "recovery_time": self.recovery_time,
-            "last_failure_age": time.time() - self._last_failure_time
-            if self._last_failure_time
-            else None,
+            "last_failure_age": time.time() - self._last_failure_time if self._last_failure_time else None,
         }
 
 
@@ -201,9 +195,7 @@ class RateLimiter:
             time.sleep(wait_time)
     """
 
-    requests_per_minute: int = field(
-        default_factory=lambda: Config.RATE_LIMIT_REQUESTS_PER_MINUTE
-    )
+    requests_per_minute: int = field(default_factory=lambda: Config.RATE_LIMIT_REQUESTS_PER_MINUTE)
     window_size: float = 60.0  # seconds
 
     # Internal state
@@ -295,11 +287,7 @@ def categorize_error(error: Exception) -> ErrorCategory:
         return ErrorCategory.CIRCUIT_OPEN
 
     # Rate limiting
-    if (
-        "429" in error_str
-        or "rate limit" in error_str
-        or "too many requests" in error_str
-    ):
+    if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
         return ErrorCategory.RATE_LIMITED
 
     # Retryable HTTP errors
@@ -311,9 +299,7 @@ def categorize_error(error: Exception) -> ErrorCategory:
         return ErrorCategory.RETRYABLE
 
     # Connection errors are retryable
-    if "connection" in error_str and (
-        "refused" in error_str or "reset" in error_str or "error" in error_str
-    ):
+    if "connection" in error_str and ("refused" in error_str or "reset" in error_str or "error" in error_str):
         return ErrorCategory.RETRYABLE
 
     # Client errors (4xx except 429) are usually fatal
@@ -376,9 +362,7 @@ class HealthCheck:
     def check(self, name: str) -> HealthStatus:
         """Run a specific health check."""
         if name not in self._checks:
-            return HealthStatus(
-                healthy=False, component=name, details={"error": "unknown component"}
-            )
+            return HealthStatus(healthy=False, component=name, details={"error": "unknown component"})
 
         try:
             result = self._checks[name]()
@@ -438,11 +422,7 @@ class HealthCheck:
         }
 
 
-# Type variable for generic retry function
-T = TypeVar("T")
-
-
-def with_retry(
+def with_retry[T](
     fn: Callable[[], T],
     max_retries: int = 3,
     base_delay: float = 1.0,

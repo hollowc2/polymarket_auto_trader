@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 
-from src.config import Config, LOCAL_TZ, TIMEZONE_NAME
+from src.config import LOCAL_TZ, TIMEZONE_NAME, Config
 from src.core.polymarket import PolymarketClient
 from src.core.trader import LiveTrader, PaperTrader, TradingState
 
@@ -45,11 +45,7 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
 
     # Format wallet list for help text
-    wallet_list = (
-        "\n    ".join(Config.COPY_WALLETS)
-        if Config.COPY_WALLETS
-        else "(none configured)"
-    )
+    wallet_list = "\n    ".join(Config.COPY_WALLETS) if Config.COPY_WALLETS else "(none configured)"
 
     parser = argparse.ArgumentParser(
         description="Polymarket BTC 5-Min Copytrade Bot",
@@ -183,9 +179,7 @@ Related Commands:
         print("Error: No wallets to copy.")
         print("Set COPY_WALLETS in .env or use --wallets flag")
         print("\nExample:")
-        print(
-            "  python copybot.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313"
-        )
+        print("  python copybot.py --paper --wallets 0x1d0034134e339a309700ff2d34e99fa2d48b0313")
         sys.exit(1)
 
     # Init - use faster hybrid monitor if available
@@ -239,9 +233,7 @@ Related Commands:
     for wallet in wallets:
         recent = monitor.get_latest_btc_5m_trades(wallet, limit=3)
         for sig in recent:
-            log(
-                f"  {sig.trader_name}: {sig.side} {sig.direction} @ {sig.price:.2f} (${sig.usdc_amount:.2f})"
-            )
+            log(f"  {sig.trader_name}: {sig.side} {sig.direction} @ {sig.price:.2f} (${sig.usdc_amount:.2f})")
     log("")
 
     while running:
@@ -264,16 +256,10 @@ Related Commands:
 
                     # Calculate win rate
                     total_settled = session_wins + session_losses
-                    win_rate = (
-                        (session_wins / total_settled * 100) if total_settled > 0 else 0
-                    )
+                    win_rate = (session_wins / total_settled * 100) if total_settled > 0 else 0
 
                     emoji = "✓ WIN" if won else "✗ LOSS"
-                    fee_info = (
-                        f" (fee: {trade.fee_pct:.1%})"
-                        if won and trade.fee_pct > 0
-                        else ""
-                    )
+                    fee_info = f" (fee: {trade.fee_pct:.1%})" if won and trade.fee_pct > 0 else ""
                     log(
                         f"[{emoji}] {trade.direction.upper()} @ {trade.execution_price:.2f} -> {market.outcome.upper()} "
                         f"| PnL: ${trade.pnl:+.2f}{fee_info}"
@@ -291,9 +277,7 @@ Related Commands:
                 # Check if it's a bankroll issue (unrecoverable)
                 if "Bankroll too low" in reason or "Max daily loss" in reason:
                     total_settled = session_wins + session_losses
-                    win_rate = (
-                        (session_wins / total_settled * 100) if total_settled > 0 else 0
-                    )
+                    win_rate = (session_wins / total_settled * 100) if total_settled > 0 else 0
                     log(f"❌ STOPPING: {reason}")
                     log(
                         f"   Session: {session_wins}W/{session_losses}L ({win_rate:.0f}%) "
@@ -317,9 +301,7 @@ Related Commands:
 
                 # Skip SELL signals (we only copy buys for now)
                 if sig.side != "BUY":
-                    log(
-                        f"[skip] {sig.trader_name} SELL {sig.direction} (only copying BUYs)"
-                    )
+                    log(f"[skip] {sig.trader_name} SELL {sig.direction} (only copying BUYs)")
                     copied_markets.add(key)
                     continue
 
@@ -352,9 +334,7 @@ Related Commands:
                 copy_delay_ms = now_ms - trader_ts_ms
 
                 # Get current market price for our entry
-                current_price = (
-                    market.up_price if direction == "up" else market.down_price
-                )
+                current_price = market.up_price if direction == "up" else market.down_price
 
                 delay_sec = copy_delay_ms / 1000
                 log(
@@ -392,9 +372,7 @@ Related Commands:
 
                 # Show current session status
                 total_settled = session_wins + session_losses
-                win_rate = (
-                    (session_wins / total_settled * 100) if total_settled > 0 else 0
-                )
+                win_rate = (session_wins / total_settled * 100) if total_settled > 0 else 0
                 log(
                     f"       Placed #{len(copied_markets)} | Pending: {len(pending)} "
                     f"| Session: {session_wins}W/{session_losses}L ({win_rate:.0f}%) ${session_pnl:+.2f}"
@@ -403,14 +381,8 @@ Related Commands:
             # === HEARTBEAT ===
             if now % 60 < Config.COPY_POLL_INTERVAL:
                 total_settled = session_wins + session_losses
-                win_rate = (
-                    (session_wins / total_settled * 100) if total_settled > 0 else 0
-                )
-                stats = (
-                    f"{session_wins}W/{session_losses}L"
-                    if total_settled > 0
-                    else "no trades yet"
-                )
+                win_rate = (session_wins / total_settled * 100) if total_settled > 0 else 0
+                stats = f"{session_wins}W/{session_losses}L" if total_settled > 0 else "no trades yet"
 
                 # Calculate unrealized PnL for pending trades
                 unrealized_pnl = 0.0
@@ -420,40 +392,22 @@ Related Commands:
                         market = client.get_market(trade.timestamp)
                         if market:
                             # Get current price for our direction
-                            current_price = (
-                                market.up_price
-                                if trade.direction == "up"
-                                else market.down_price
-                            )
-                            exec_price = (
-                                trade.execution_price
-                                if trade.execution_price > 0
-                                else trade.entry_price
-                            )
+                            current_price = market.up_price if trade.direction == "up" else market.down_price
+                            exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
                             shares = trade.amount / exec_price if exec_price > 0 else 0
 
                             # Calculate expected value
                             win_prob = current_price
                             gross_win = shares - trade.amount
-                            fee_on_win = (
-                                gross_win * trade.fee_pct if gross_win > 0 else 0
-                            )
+                            fee_on_win = gross_win * trade.fee_pct if gross_win > 0 else 0
                             net_win = gross_win - fee_on_win
-                            ev = (win_prob * net_win) + (
-                                (1 - win_prob) * (-trade.amount)
-                            )
+                            ev = (win_prob * net_win) + ((1 - win_prob) * (-trade.amount))
                             unrealized_pnl += ev
 
                             # Determine if winning or losing
-                            implied_winner = (
-                                "up" if market.up_price > market.down_price else "down"
-                            )
-                            status_icon = (
-                                "↑" if trade.direction == implied_winner else "↓"
-                            )
-                            pending_status.append(
-                                f"{trade.direction[0].upper()}{status_icon}{current_price:.0%}"
-                            )
+                            implied_winner = "up" if market.up_price > market.down_price else "down"
+                            status_icon = "↑" if trade.direction == implied_winner else "↓"
+                            pending_status.append(f"{trade.direction[0].upper()}{status_icon}{current_price:.0%}")
                     except Exception:
                         pass
 
@@ -464,9 +418,7 @@ Related Commands:
                 )
                 # Show pending trade status if any
                 if pending_status:
-                    log(
-                        f"    Pending trades: {', '.join(pending_status)} | Unrealized: ${unrealized_pnl:+.2f}"
-                    )
+                    log(f"    Pending trades: {', '.join(pending_status)} | Unrealized: ${unrealized_pnl:+.2f}")
 
                 # Show detailed pending status every 5 minutes
                 if now % 300 < Config.COPY_POLL_INTERVAL and pending:
@@ -475,35 +427,15 @@ Related Commands:
                         try:
                             market = client.get_market(trade.timestamp)
                             if market:
-                                current_price = (
-                                    market.up_price
-                                    if trade.direction == "up"
-                                    else market.down_price
-                                )
-                                implied_winner = (
-                                    "up"
-                                    if market.up_price > market.down_price
-                                    else "down"
-                                )
-                                likely = (
-                                    "WIN"
-                                    if trade.direction == implied_winner
-                                    else "LOSS"
-                                )
-                                exec_price = (
-                                    trade.execution_price
-                                    if trade.execution_price > 0
-                                    else trade.entry_price
-                                )
-                                shares = (
-                                    trade.amount / exec_price if exec_price > 0 else 0
-                                )
+                                current_price = market.up_price if trade.direction == "up" else market.down_price
+                                implied_winner = "up" if market.up_price > market.down_price else "down"
+                                likely = "WIN" if trade.direction == implied_winner else "LOSS"
+                                exec_price = trade.execution_price if trade.execution_price > 0 else trade.entry_price
+                                shares = trade.amount / exec_price if exec_price > 0 else 0
 
                                 # Calculate potential outcomes
                                 gross_win = shares - trade.amount
-                                fee_on_win = (
-                                    gross_win * trade.fee_pct if gross_win > 0 else 0
-                                )
+                                fee_on_win = gross_win * trade.fee_pct if gross_win > 0 else 0
                                 net_win = gross_win - fee_on_win
 
                                 log(

@@ -119,9 +119,7 @@ class PolygonscanClient:
             gas_price_gwei = gas_price_wei / 1e9
 
             # Effective gas price (for EIP-1559 transactions)
-            effective_gas_price_wei = self._hex_to_int(
-                receipt.get("effectiveGasPrice", tx_data.get("gasPrice", "0x0"))
-            )
+            effective_gas_price_wei = self._hex_to_int(receipt.get("effectiveGasPrice", tx_data.get("gasPrice", "0x0")))
 
             # Calculate tx fee in MATIC (wei -> MATIC = wei / 10^18)
             tx_fee_wei = gas_used * effective_gas_price_wei
@@ -167,9 +165,7 @@ class PolygonscanClient:
         """
         try:
             block_hex = hex(block_number)
-            block_data = self._call(
-                "proxy", "eth_getBlockByNumber", tag=block_hex, boolean="false"
-            )
+            block_data = self._call("proxy", "eth_getBlockByNumber", tag=block_hex, boolean="false")
             if block_data:
                 timestamp_hex = block_data.get("timestamp", "0x0")
                 return int(cast(str, timestamp_hex), 16)
