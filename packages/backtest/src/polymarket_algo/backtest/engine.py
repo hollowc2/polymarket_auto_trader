@@ -7,8 +7,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from polymarket_algo.core import Strategy
 
 StrategyCallable = Callable[..., pd.Series | pd.DataFrame]
+StrategyLike = Strategy | StrategyCallable
 
 
 @dataclass
@@ -24,16 +26,26 @@ def _max_drawdown(equity_curve: pd.Series) -> float:
     return float(drawdown.min()) if not drawdown.empty else 0.0
 
 
+def _evaluate_strategy_output(
+    candles: pd.DataFrame,
+    strategy: StrategyLike,
+    strategy_params: dict[str, Any],
+) -> pd.Series | pd.DataFrame:
+    if hasattr(strategy, "evaluate") and callable(strategy.evaluate):
+        return strategy.evaluate(candles, **strategy_params)
+    return strategy(candles, **strategy_params)
+
+
 def run_backtest(
     candles: pd.DataFrame,
-    strategy: StrategyCallable,
+    strategy: StrategyLike,
     strategy_params: dict[str, Any] | None = None,
     buy_price: float = 0.50,
     win_payout: float = 0.95,
 ) -> BacktestResult:
     strategy_params = strategy_params or {}
 
-    out = strategy(candles, **strategy_params)
+    out = _evaluate_strategy_output(candles, strategy, strategy_params)
     if isinstance(out, pd.DataFrame):
         signals = out["signal"].astype(int)
         size = out.get("size", pd.Series(15.0, index=candles.index)).astype(float)
@@ -90,7 +102,7 @@ def run_backtest(
 
 def parameter_sweep(
     candles: pd.DataFrame,
-    strategy: StrategyCallable,
+    strategy: StrategyLike,
     param_grid: dict[str, list[Any]],
 ) -> pd.DataFrame:
     keys = list(param_grid.keys())
