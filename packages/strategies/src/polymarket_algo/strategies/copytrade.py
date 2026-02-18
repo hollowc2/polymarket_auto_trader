@@ -1,7 +1,14 @@
 class CopytradeStrategy:
+    """Wallet activity driven strategy.
+
+    This strategy is event-driven and consumes live wallet activity streams,
+    so it cannot be backtested on candle-only historical data.
+    """
+
     name = "copytrade"
     description = "Wallet activity driven copytrade strategy"
     timeframe = "5m"
+    kind = "event_driven"
 
     @property
     def default_params(self):

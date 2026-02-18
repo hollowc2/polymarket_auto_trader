@@ -7,7 +7,6 @@ dependencies = ["pandas>=3.0.0", "polymarket-algo-core", "polymarket-algo-indica
 [project.entry-points."polymarket_algo.strategies"]
 streak_reversal = "polymarket_algo.strategies:StreakReversalStrategy"
 candle_direction = "polymarket_algo.strategies:CandleDirectionStrategy"
-selective_filter = "polymarket_algo.strategies:SelectiveFilter"
 copytrade = "polymarket_algo.strategies:CopytradeStrategy"
 
 [build-system]

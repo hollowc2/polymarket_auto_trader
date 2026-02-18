@@ -1,4 +1,4 @@
-from .candle_direction import candle_direction_strategy as candle_direction_strategy
+from .candle_direction import CandleDirectionStrategy as CandleDirectionStrategy
 from .copytrade import CopytradeStrategy as CopytradeStrategy
 from .selective_filter import SelectiveFilter as SelectiveFilter
 from .streak_reversal import StreakReversalStrategy as StreakReversalStrategy
