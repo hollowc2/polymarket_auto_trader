@@ -9,7 +9,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from config import Config
+from polymarket_algo.core.config import Config
 
 
 @dataclass

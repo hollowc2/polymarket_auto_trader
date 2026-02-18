@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import websockets
+from polymarket_algo.executor.client import DelayImpactModel, PolymarketClient
 from websockets.exceptions import ConnectionClosed
 
 
@@ -403,8 +404,6 @@ class PolymarketWebSocket:
         Returns: (exec_price, spread, slippage_pct, fill_pct, delay_impact_pct, delay_breakdown)
         Falls back to REST API if no cached data.
         """
-        from polymarket import DelayImpactModel
-
         book = self.get_orderbook(token_id)
 
         if book and book.timestamp > 0:
@@ -769,8 +768,6 @@ class MarketDataCache:
     """
 
     def __init__(self, use_websocket: bool = True):
-        from polymarket import PolymarketClient
-
         self._rest_client = PolymarketClient()
         self._ws: PolymarketWebSocket | None = None
         self._use_websocket = use_websocket
