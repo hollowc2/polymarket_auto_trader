@@ -19,7 +19,7 @@ repos:
 
       - id: ty-check
         name: ty typecheck
-        entry: ty check
+        entry: /nix/store/h5pvbqg0hyqb76sqfhjs6s7ymw0ha31p-ty-0.0.16/bin/ty check
         language: system
         pass_filenames: false
         always_run: true
