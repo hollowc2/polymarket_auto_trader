@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import product
-from typing import Any
+from typing import Any, TypeGuard, cast
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,11 @@ from polymarket_algo.core import Strategy
 
 StrategyCallable = Callable[..., pd.Series | pd.DataFrame]
 StrategyLike = Strategy | StrategyCallable
+
+
+def _has_evaluate(strategy: StrategyLike) -> TypeGuard[Strategy]:
+    """Return True if strategy is an object with a callable .evaluate() method."""
+    return callable(getattr(strategy, "evaluate", None))
 
 
 @dataclass
@@ -31,9 +36,9 @@ def _evaluate_strategy_output(
     strategy: StrategyLike,
     strategy_params: dict[str, Any],
 ) -> pd.Series | pd.DataFrame:
-    if hasattr(strategy, "evaluate") and callable(strategy.evaluate):
+    if _has_evaluate(strategy):
         return strategy.evaluate(candles, **strategy_params)
-    return strategy(candles, **strategy_params)
+    return cast(StrategyCallable, strategy)(candles, **strategy_params)
 
 
 def run_backtest(
@@ -48,7 +53,7 @@ def run_backtest(
     out = _evaluate_strategy_output(candles, strategy, strategy_params)
     if isinstance(out, pd.DataFrame):
         signals = out["signal"].astype(int)
-        size = out.get("size", pd.Series(15.0, index=candles.index)).astype(float)
+        size = (out["size"].astype(float) if "size" in out.columns else pd.Series(15.0, index=candles.index))
     else:
         signals = out.astype(int)
         size = pd.Series(15.0, index=candles.index)

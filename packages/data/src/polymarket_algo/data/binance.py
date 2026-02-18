@@ -73,7 +73,8 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.D
     for col in num_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df["number_of_trades"] = pd.to_numeric(df["number_of_trades"], errors="coerce").astype("Int64")
+    trades_numeric = pd.to_numeric(df["number_of_trades"], errors="coerce")
+    df["number_of_trades"] = pd.Series(trades_numeric, index=df.index).astype("Int64")
     df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
     df["close_time"] = pd.to_datetime(df["close_time"], unit="ms", utc=True)
     return df

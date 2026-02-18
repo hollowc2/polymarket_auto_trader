@@ -1392,6 +1392,8 @@ class LiveTrader:
         for _attempt in range(max_attempts):
             try:
                 order = self.client.get_order(order_id)
+                if not isinstance(order, dict):
+                    continue
                 status = order.get("status", "unknown")
 
                 # FOK orders should be immediately filled or cancelled
@@ -1455,6 +1457,8 @@ class LiveTrader:
         kwargs.pop("precomputed_execution", None)
 
         token_id = market.up_token_id if direction == "up" else market.down_token_id
+        if token_id is None:
+            return None
         entry_price = market.up_price if direction == "up" else market.down_price
         if entry_price <= 0:
             entry_price = 0.5
@@ -1485,7 +1489,8 @@ class LiveTrader:
             signed_order = self.client.create_market_order(market_order)
             response = self.client.post_order(signed_order, self.OrderType.FOK)
 
-            order_id = response.get("orderID", response.get("id", "unknown"))
+            resp_dict: dict = response if isinstance(response, dict) else {}
+            order_id = resp_dict.get("orderID", resp_dict.get("id", "unknown"))
             order_status = "submitted"
 
             # Log based on strategy type

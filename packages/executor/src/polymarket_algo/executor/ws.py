@@ -307,8 +307,10 @@ class PolymarketWebSocket:
         }
         await self._ws.send(json.dumps(msg))
 
-    async def _handle_message(self, raw: str):
+    async def _handle_message(self, raw: str | bytes):
         """Handle incoming WebSocket message."""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -650,8 +652,10 @@ class UserWebSocket:
         await self._ws.send(json.dumps(auth_msg))
         print("[user-ws] Authentication message sent")
 
-    async def _handle_message(self, raw: str):
+    async def _handle_message(self, raw: str | bytes):
         """Handle incoming WebSocket message."""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -843,7 +847,8 @@ class MarketDataCache:
         # Subscribe to WebSocket if available
         if self._ws and self._ws.is_connected():
             # Use slug as condition_id for BTC markets
-            self._ws.subscribe_market(market.slug, [market.up_token_id, market.down_token_id])
+            token_ids = [t for t in [market.up_token_id, market.down_token_id] if t is not None]
+            self._ws.subscribe_market(market.slug, token_ids or None)
 
         return True
 

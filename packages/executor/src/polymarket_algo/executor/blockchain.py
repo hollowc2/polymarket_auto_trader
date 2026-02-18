@@ -97,12 +97,12 @@ class PolygonscanClient:
         try:
             # Fetch transaction details
             tx_data = self._call("proxy", "eth_getTransactionByHash", txhash=tx_hash)
-            if not tx_data or tx_data == "null":
+            if not tx_data or tx_data == "null" or not isinstance(tx_data, dict):
                 return None
 
             # Fetch transaction receipt for gas used and status
             receipt = self._call("proxy", "eth_getTransactionReceipt", txhash=tx_hash)
-            if not receipt or receipt == "null":
+            if not receipt or receipt == "null" or not isinstance(receipt, dict):
                 return None
 
             # Parse block number (hex to int)
@@ -164,7 +164,7 @@ class PolygonscanClient:
         try:
             block_hex = hex(block_number)
             block_data = self._call("proxy", "eth_getBlockByNumber", tag=block_hex, boolean="false")
-            if block_data and block_data != "null":
+            if block_data and block_data != "null" and isinstance(block_data, dict):
                 timestamp_hex = block_data.get("timestamp", "0x0")
                 return int(timestamp_hex, 16)
         except Exception:

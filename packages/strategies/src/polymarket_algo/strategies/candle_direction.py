@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from polymarket_algo.indicators import ema, macd, rsi
@@ -40,7 +40,7 @@ class CandleDirectionStrategy:
     def evaluate(self, candles: pd.DataFrame, **params: Any) -> pd.DataFrame:
         config = {**self.default_params, **params}
 
-        close = candles["close"]
+        close = cast(pd.Series, candles["close"])
 
         ema_fast_line = ema(close, int(config["ema_fast"]))
         ema_slow_line = ema(close, int(config["ema_slow"]))
