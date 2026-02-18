@@ -4,12 +4,11 @@ import importlib.util
 import inspect
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import TypeAlias
 
 from .types import Indicator, Strategy
 
-PluginClass: TypeAlias = type[Strategy] | type[Indicator]
-PluginMap: TypeAlias = dict[str, PluginClass]
+type PluginClass = type[Strategy] | type[Indicator]
+type PluginMap = dict[str, PluginClass]
 
 
 def _discover(group: str) -> PluginMap:
