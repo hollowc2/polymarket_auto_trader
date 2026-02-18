@@ -37,8 +37,8 @@ feed.start()
 ### With Nix (recommended)
 
 ```bash
-git clone https://github.com/0xrsydn/polymarket-streak-bot.git
-cd polymarket-streak-bot
+git clone https://github.com/0xrsydn/polymarket-crypto-toolkit.git
+cd polymarket-crypto-toolkit
 nix develop    # drops you into a shell with python, uv, ruff, ty, prek
                # auto-runs: uv sync, prek install
 cp .env.example .env
@@ -49,8 +49,8 @@ cp .env.example .env
 Requires: Python 3.13+, [uv](https://docs.astral.sh/uv/)
 
 ```bash
-git clone https://github.com/0xrsydn/polymarket-streak-bot.git
-cd polymarket-streak-bot
+git clone https://github.com/0xrsydn/polymarket-crypto-toolkit.git
+cd polymarket-crypto-toolkit
 uv sync --all-packages
 cp .env.example .env
 
