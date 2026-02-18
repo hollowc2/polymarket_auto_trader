@@ -53,7 +53,7 @@ def run_backtest(
     out = _evaluate_strategy_output(candles, strategy, strategy_params)
     if isinstance(out, pd.DataFrame):
         signals = out["signal"].astype(int)
-        size = (out["size"].astype(float) if "size" in out.columns else pd.Series(15.0, index=candles.index))
+        size = out["size"].astype(float) if "size" in out.columns else pd.Series(15.0, index=candles.index)
     else:
         signals = out.astype(int)
         size = pd.Series(15.0, index=candles.index)
