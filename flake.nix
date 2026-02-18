@@ -16,6 +16,8 @@
             python313
             uv
             prek
+            ruff
+            ty
           ];
 
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
@@ -33,7 +35,10 @@
             # Activate venv for Python deps
             source .venv/bin/activate
 
-            echo "Python $(python --version) | uv $(uv --version)"
+            # Prioritize Nix tools over venv binaries
+            export PATH="${pkgs.lib.makeBinPath (with pkgs; [ ruff ty prek ])}:$PATH"
+
+            echo "Python $(python --version) | uv $(uv --version) | ruff $(ruff version)"
 
             # Keep workspace dependencies in sync
             uv sync --all-packages >/dev/null 2>&1 || true
