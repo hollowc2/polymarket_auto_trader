@@ -45,8 +45,9 @@ class Config:
     PAPER_TRADE: bool = os.getenv("PAPER_TRADE", "true").lower() == "true"
 
     # Logging
-    LOG_FILE: str = "bot.log"
-    TRADES_FILE: str = "trades.json"
+    LOG_FILE: str = os.getenv("LOG_FILE", "bot.log")
+    TRADES_FILE: str = os.getenv("TRADES_FILE", "trades.json")
+    HISTORY_FILE: str = os.getenv("HISTORY_FILE", "trade_history_full.json")
 
     # Copytrade
     DATA_API = "https://data-api.polymarket.com"

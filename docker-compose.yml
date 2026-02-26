@@ -1,0 +1,50 @@
+x-bot-common: &bot-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  env_file:
+    - .env                                 # SCP'd to VPS manually, never committed to git
+  volumes:
+    - /opt/polymarket/state:/app/state     # trades.json, bot.log, history files
+    - /opt/polymarket/data:/app/data       # Binance OHLCV parquet files
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+
+  streak-bot:
+    <<: *bot-common
+    container_name: polymarket-streak-bot
+    command: ["uv", "run", "python", "scripts/streak_bot.py", "--paper"]
+    environment:
+      PAPER_TRADE: "true"                  # Safety override — must remove this line to go live
+      TRADES_FILE: "/app/state/trades.json"
+      HISTORY_FILE: "/app/state/trade_history_full.json"
+      LOG_FILE: "/app/state/bot.log"
+
+  # --- Copy Bot (uncomment to enable) ---
+  # copy-bot:
+  #   <<: *bot-common
+  #   container_name: polymarket-copy-bot
+  #   command: ["uv", "run", "python", "scripts/copybot.py"]
+  #   environment:
+  #     PAPER_TRADE: "true"
+  #     COPY_WALLETS: "0xTargetWalletHere"
+  #     TRADES_FILE: "/app/state/copybot-trades.json"
+  #     HISTORY_FILE: "/app/state/copybot-history.json"
+  #     LOG_FILE: "/app/state/copybot.log"
+
+  # --- New Bot Template (copy this block for each new bot) ---
+  # my-new-bot:
+  #   <<: *bot-common
+  #   container_name: polymarket-my-new-bot
+  #   command: ["uv", "run", "python", "scripts/my_bot.py", "--paper"]
+  #   environment:
+  #     PAPER_TRADE: "true"
+  #     TRADES_FILE: "/app/state/my-bot-trades.json"
+  #     HISTORY_FILE: "/app/state/my-bot-history.json"
+  #     LOG_FILE: "/app/state/my-bot.log"

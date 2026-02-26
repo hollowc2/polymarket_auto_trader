@@ -552,7 +552,7 @@ class TradingState:
 
     def _append_to_full_history(self):
         """Append only new trades to the full history file."""
-        history_file = "trade_history_full.json"
+        history_file = Config.HISTORY_FILE
 
         # Find trades that haven't been saved yet
         new_trades = []
@@ -588,7 +588,7 @@ class TradingState:
 
     def _update_settled_trades_in_history(self):
         """Update settled trades in the full history file (nested format)."""
-        history_file = "trade_history_full.json"
+        history_file = Config.HISTORY_FILE
 
         if not os.path.exists(history_file):
             return
@@ -898,7 +898,7 @@ class TradingState:
                 print(f"[trader] Error loading state: {e}")
 
         # Load saved trade IDs from full history to avoid duplicates
-        history_file = "trade_history_full.json"
+        history_file = Config.HISTORY_FILE
         if os.path.exists(history_file):
             try:
                 with open(history_file) as f:
@@ -923,7 +923,7 @@ class TradingState:
 
         Works with nested JSON format. Returns tuple of (updated_count, remaining_count).
         """
-        history_file = "trade_history_full.json"
+        history_file = Config.HISTORY_FILE
         if not os.path.exists(history_file):
             print("[backfill] No history file found")
             return 0, 0
@@ -1032,7 +1032,7 @@ class TradingState:
     def load_full_history(cls) -> "TradingState":
         """Load complete trade history from the full history file."""
         state = cls()
-        history_file = "trade_history_full.json"
+        history_file = Config.HISTORY_FILE
 
         if os.path.exists(history_file):
             try:
