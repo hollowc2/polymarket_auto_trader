@@ -2,12 +2,18 @@
 
 from dataclasses import dataclass
 
-# Historical reversal rates from 570-market backtest (2 days)
+# Measured reversal rates — 2-year Binance 5m BTCUSDT backtest (210,240 candles)
+# 95% Wilson CI: ±0.3% at trigger=2, ±0.6% at trigger=4, ±3.0% at trigger=8
+# Previous values (from 570-market, 2-day Polymarket sample) were significantly
+# overstated: trigger=4 was 0.667, trigger=5 was 0.824 — both now confirmed wrong.
 REVERSAL_RATES: dict[int, float] = {
-    2: 0.540,
-    3: 0.579,
-    4: 0.667,
-    5: 0.824,
+    2: 0.518,
+    3: 0.527,
+    4: 0.537,
+    5: 0.533,
+    6: 0.540,
+    7: 0.550,
+    8: 0.562,
 }
 
 
