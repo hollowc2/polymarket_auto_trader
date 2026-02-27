@@ -87,8 +87,9 @@ def win_rate_by_trigger(candles: pd.DataFrame, strategy: StreakReversalStrategy)
         lo, hi = wilson_ci(wins, n)
         half_width = (hi - lo) / 2
         ci_str = f"[{lo:.1%}, {hi:.1%}]"
-        poly_str = f"{REVERSAL_RATES.get(min(trigger, 5), REVERSAL_RATES[5]):.1%}" if trigger <= 5 else "  n/a"
-        delta = wr - REVERSAL_RATES.get(min(trigger, 5), REVERSAL_RATES[5]) if trigger <= 5 else None
+        tf_rates = REVERSAL_RATES.get(INTERVAL, REVERSAL_RATES["5m"])
+        poly_str = f"{tf_rates.get(trigger, tf_rates[max(tf_rates)]):.1%}"
+        delta = wr - tf_rates.get(trigger, tf_rates[max(tf_rates)])
         delta_str = f"{delta:+.1%}" if delta is not None else "  n/a"
         print(f"  {trigger:>4}  {n:>7}  {wr:>9.1%}  {ci_str:>15}  {half_width:>5.1%}  {poly_str:>6}  {delta_str:>7}")
     print()
@@ -161,7 +162,8 @@ def main() -> None:
     if test_count < 30:
         print(f"  WARNING: only {test_count} test trades — sample too small for reliable estimate")
         print(f"  Fallback to REVERSAL_RATES table for trigger={best_params['trigger']}")
-        poly = REVERSAL_RATES.get(min(best_params["trigger"], 5), REVERSAL_RATES[5])
+        tf_rates = REVERSAL_RATES.get(INTERVAL, REVERSAL_RATES["5m"])
+        poly = tf_rates.get(best_params["trigger"], tf_rates[max(tf_rates)])
         print(f"  Polymarket historical rate: {poly:.1%}")
     else:
         print(f"  Measured test win rate : {test_wr:.3f}")
@@ -171,4 +173,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--interval", default=INTERVAL, help="Candle interval (default: 5m)")
+    parser.add_argument("--days", type=int, default=LOOKBACK_DAYS, help="Lookback days (default: 730)")
+    args = parser.parse_args()
+    INTERVAL = args.interval
+    LOOKBACK_DAYS = args.days
     main()

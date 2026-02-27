@@ -2,7 +2,10 @@
 
 import pandas as pd
 
-from .sizing import REVERSAL_RATES, BetDecision, kelly_size
+from .sizing import BetDecision, get_reversal_rate, kelly_size
+
+# How many raw 5m Polymarket outcomes make up one bar at each timeframe.
+TF_GROUP_SIZE: dict[str, int] = {"5m": 1, "15m": 3, "1h": 12}
 
 
 def detect_streak(outcomes: list[str]) -> tuple[int, str]:
@@ -27,6 +30,30 @@ def detect_streak(outcomes: list[str]) -> tuple[int, str]:
             break
 
     return streak, current
+
+
+def resample_outcomes(outcomes: list[str], group_size: int) -> list[str]:
+    """Aggregate consecutive 5m outcomes into larger-timeframe bars.
+
+    Each group of `group_size` outcomes becomes one bar: "up" if the majority
+    are "up", "down" otherwise (ties go to "down" — conservative).
+
+    Args:
+        outcomes: Raw 5m outcome strings, oldest first.
+        group_size: Number of 5m outcomes per bar (1=5m, 3=15m, 12=1h).
+
+    Returns:
+        Resampled outcome list, length = len(outcomes) // group_size.
+    """
+    if group_size == 1:
+        return outcomes
+    resampled = []
+    n = (len(outcomes) // group_size) * group_size
+    for i in range(0, n, group_size):
+        group = outcomes[i : i + group_size]
+        ups = sum(1 for o in group if o == "up")
+        resampled.append("up" if ups > group_size / 2 else "down")
+    return resampled
 
 
 def outcomes_to_candles(outcomes: list[str]) -> pd.DataFrame:
@@ -64,16 +91,18 @@ def interpret_signal(
     entry_price: float,
     max_bet: float,
     max_bankroll_pct: float = 0.1,
+    timeframe: str = "5m",
 ) -> BetDecision:
     """Read last row of strategy output and produce a BetDecision.
 
     Args:
         result: DataFrame from strategy.evaluate() with "signal" and "size" columns
-        outcomes: Recent outcomes (for streak detection / confidence lookup)
+        outcomes: Resampled outcomes at the target timeframe (for streak detection).
         bankroll: Current bankroll in USD
         entry_price: Market price for the bet direction
         max_bet: Maximum bet amount from CLI/config
         max_bankroll_pct: Never risk more than this fraction of bankroll
+        timeframe: Candle timeframe used — selects the correct REVERSAL_RATES table.
 
     Returns:
         BetDecision ready for trader.place_bet()
@@ -92,9 +121,9 @@ def interpret_signal(
 
     direction = "down" if signal == -1 else "up"
 
-    # Look up confidence from reversal rates using detected streak
+    # Look up confidence from the timeframe-specific reversal rate table
     streak_len, streak_dir = detect_streak(outcomes)
-    confidence = REVERSAL_RATES.get(min(streak_len, 5), REVERSAL_RATES.get(5, 0.824))
+    confidence = get_reversal_rate(timeframe, streak_len)
 
     # Calculate Kelly-optimal size
     odds = 1.0 / entry_price if entry_price > 0 else 2.0
@@ -105,8 +134,8 @@ def interpret_signal(
 
     bet_direction_label = direction.upper()
     reason = (
-        f"Streak of {streak_len}x {streak_dir} detected. "
-        f"Historical reversal rate: {confidence:.1%}. "
+        f"Streak of {streak_len}x {streak_dir} ({timeframe}) detected. "
+        f"Reversal rate: {confidence:.1%}. "
         f"Betting {bet_direction_label} (Kelly=${kelly:.2f}, capped=${size:.2f})."
     )
 

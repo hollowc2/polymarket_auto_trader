@@ -1,6 +1,8 @@
+from .adapters import TF_GROUP_SIZE as TF_GROUP_SIZE
 from .adapters import detect_streak as detect_streak
 from .adapters import interpret_signal as interpret_signal
 from .adapters import outcomes_to_candles as outcomes_to_candles
+from .adapters import resample_outcomes as resample_outcomes
 from .config import LOCAL_TZ as LOCAL_TZ
 from .config import TIMEZONE_NAME as TIMEZONE_NAME
 from .config import Config as Config
@@ -8,8 +10,10 @@ from .plugin import PluginRegistry as PluginRegistry
 from .plugin import discover_indicators as discover_indicators
 from .plugin import discover_strategies as discover_strategies
 from .plugin import load_local_plugins as load_local_plugins
+from .sizing import DEFAULT_TRIGGERS as DEFAULT_TRIGGERS
 from .sizing import REVERSAL_RATES as REVERSAL_RATES
 from .sizing import BetDecision as BetDecision
+from .sizing import get_reversal_rate as get_reversal_rate
 from .sizing import kelly_size as kelly_size
 from .types import DataFeed as DataFeed
 from .types import Indicator as Indicator

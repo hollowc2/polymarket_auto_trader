@@ -33,6 +33,7 @@ class Config:
 
     # Strategy
     STREAK_TRIGGER: int = int(os.getenv("STREAK_TRIGGER", "4"))
+    TIMEFRAME: str = os.getenv("TIMEFRAME", "5m")  # 5m | 15m | 1h
     BET_AMOUNT: float = float(os.getenv("BET_AMOUNT", "5"))
     MIN_BET: float = float(os.getenv("MIN_BET", "1"))
     MAX_DAILY_BETS: int = int(os.getenv("MAX_DAILY_BETS", "100"))
