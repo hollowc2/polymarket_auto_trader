@@ -1,25 +1,19 @@
 import os
-from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-# Timezone configuration
-TIMEZONE_NAME = os.getenv("TIMEZONE", "Asia/Jakarta")
-
-# Create timezone object (Asia/Jakarta = UTC+7)
-_TZ_OFFSETS = {
-    "Asia/Jakarta": timedelta(hours=7),
-    "Asia/Singapore": timedelta(hours=8),
-    "Asia/Tokyo": timedelta(hours=9),
-    "UTC": timedelta(hours=0),
-    "America/New_York": timedelta(hours=-5),
-    "America/Los_Angeles": timedelta(hours=-8),
-}
-
-LOCAL_TZ = timezone(_TZ_OFFSETS.get(TIMEZONE_NAME, timedelta(hours=7)))
+# Timezone configuration — accepts any IANA name (e.g. UTC, Europe/Paris, America/New_York)
+TIMEZONE_NAME = os.getenv("TIMEZONE", "UTC")
+try:
+    LOCAL_TZ = ZoneInfo(TIMEZONE_NAME)
+except ZoneInfoNotFoundError:
+    print(f"[config] Unknown timezone {TIMEZONE_NAME!r}, falling back to UTC")
+    TIMEZONE_NAME = "UTC"
+    LOCAL_TZ = ZoneInfo("UTC")
 
 
 class Config:

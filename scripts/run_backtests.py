@@ -25,6 +25,8 @@ PARAM_GRID = {
 }
 
 TARGETS = [
+    ("btc", "5m"),
+    ("eth", "5m"),
     ("eth", "1h"),
     ("btc", "1h"),
     ("eth", "4h"),
