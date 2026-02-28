@@ -10,9 +10,12 @@ from .plugin import PluginRegistry as PluginRegistry
 from .plugin import discover_indicators as discover_indicators
 from .plugin import discover_strategies as discover_strategies
 from .plugin import load_local_plugins as load_local_plugins
+from .sizing import ASSET_REVERSAL_RATES as ASSET_REVERSAL_RATES
 from .sizing import DEFAULT_TRIGGERS as DEFAULT_TRIGGERS
 from .sizing import REVERSAL_RATES as REVERSAL_RATES
 from .sizing import BetDecision as BetDecision
+from .sizing import RateEstimate as RateEstimate
+from .sizing import get_rate_estimate as get_rate_estimate
 from .sizing import get_reversal_rate as get_reversal_rate
 from .sizing import kelly_size as kelly_size
 from .types import DataFeed as DataFeed

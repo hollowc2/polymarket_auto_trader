@@ -11,11 +11,12 @@ to see whether those historical rates hold up on raw price data.
 
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import requests
 from polymarket_algo.backtest.engine import parameter_sweep, run_backtest, walk_forward_split
-from polymarket_algo.core.sizing import REVERSAL_RATES
+from polymarket_algo.core.sizing import REVERSAL_RATES, get_rate_estimate
 from polymarket_algo.strategies.streak_reversal import StreakReversalStrategy
 
 LOOKBACK_DAYS = 730
@@ -72,12 +73,17 @@ def win_rate_by_trigger(candles: pd.DataFrame, strategy: StreakReversalStrategy)
         margin = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / denom
         return centre - margin, centre + margin
 
+    asset = SYMBOL.replace("USDT", "")
+
     print("=" * 60)
     print("WIN RATE BY TRIGGER LENGTH — full dataset")
-    print("  95% Wilson CI  |  cross-ref vs Polymarket REVERSAL_RATES")
+    print(f"  95% Wilson CI  |  cross-ref vs Polymarket rates ({asset})")
     print("=" * 60)
-    print(f"  {'trig':>4}  {'trades':>7}  {'win_rate':>9}  {'95% CI':>15}  {'±':>6}  {'poly':>6}  {'delta':>7}")
-    print(f"  {'-'*4}  {'-'*7}  {'-'*9}  {'-'*15}  {'-'*6}  {'-'*6}  {'-'*7}")
+    hdr = f"  {'trig':>4}  {'trades':>7}  {'win_rate':>9}  {'95% CI':>15}"
+    hdr += f"  {'±':>6}  {'poly':>6}  {'poly CI':>15}  {'delta':>7}"
+    print(hdr)
+    sep = f"  {'-'*4}  {'-'*7}  {'-'*9}  {'-'*15}  {'-'*6}  {'-'*6}  {'-'*15}  {'-'*7}"
+    print(sep)
     for trigger in [2, 3, 4, 5, 6, 7, 8]:
         result = run_backtest(candles, strategy, {"trigger": trigger, "size": 15.0})
         m = result.metrics
@@ -87,11 +93,22 @@ def win_rate_by_trigger(candles: pd.DataFrame, strategy: StreakReversalStrategy)
         lo, hi = wilson_ci(wins, n)
         half_width = (hi - lo) / 2
         ci_str = f"[{lo:.1%}, {hi:.1%}]"
-        tf_rates = REVERSAL_RATES.get(INTERVAL, REVERSAL_RATES["5m"])
-        poly_str = f"{tf_rates.get(trigger, tf_rates[max(tf_rates)]):.1%}"
-        delta = wr - tf_rates.get(trigger, tf_rates[max(tf_rates)])
-        delta_str = f"{delta:+.1%}" if delta is not None else "  n/a"
-        print(f"  {trigger:>4}  {n:>7}  {wr:>9.1%}  {ci_str:>15}  {half_width:>5.1%}  {poly_str:>6}  {delta_str:>7}")
+
+        est = get_rate_estimate(INTERVAL, trigger, asset)
+        if est:
+            poly_val = est.rate
+            ci_str_poly = f"[{est.ci_lo:.1%},{est.ci_hi:.1%}]"
+        else:
+            tf_rates = REVERSAL_RATES.get(INTERVAL, REVERSAL_RATES["5m"])
+            poly_val = tf_rates.get(trigger, tf_rates[max(tf_rates)])
+            ci_str_poly = "n/a"
+
+        poly_str = f"{poly_val:.1%}"
+        delta = wr - poly_val
+        delta_str = f"{delta:+.1%}"
+        row = f"  {trigger:>4}  {n:>7}  {wr:>9.1%}  {ci_str:>15}"
+        row += f"  {half_width:>5.1%}  {poly_str:>6}  {ci_str_poly:>15}  {delta_str:>7}"
+        print(row)
     print()
 
 
@@ -104,9 +121,20 @@ def main() -> None:
     start_ms = int(start.timestamp() * 1000)
     end_ms = int(now.timestamp() * 1000)
 
-    print(f"Fetching {SYMBOL} {INTERVAL} data ({LOOKBACK_DAYS} days)...")
-    candles = _fetch_klines_vision(SYMBOL, INTERVAL, start_ms, end_ms)
-    candles = candles.set_index("open_time").sort_index()
+    asset = SYMBOL.replace("USDT", "").lower()
+    parquet_path = Path("data") / f"{asset}_{INTERVAL}.parquet"
+    if parquet_path.exists():
+        print(f"Loading {parquet_path}...")
+        raw = pd.read_parquet(parquet_path)
+        raw["open_time"] = pd.to_datetime(raw["open_time"], utc=True)
+        cutoff = pd.Timestamp(start_ms, unit="ms", tz="UTC")
+        candles = raw[raw["open_time"] >= cutoff].set_index("open_time").sort_index()
+        for col in ["open", "high", "low", "close", "volume"]:
+            candles[col] = pd.to_numeric(candles[col], errors="coerce")
+    else:
+        print(f"Fetching {SYMBOL} {INTERVAL} data ({LOOKBACK_DAYS} days)...")
+        candles = _fetch_klines_vision(SYMBOL, INTERVAL, start_ms, end_ms)
+        candles = candles.set_index("open_time").sort_index()
     print(f"  {len(candles):,} candles loaded  ({candles.index[0].date()} → {candles.index[-1].date()})\n")
 
     train, test = walk_forward_split(candles)
@@ -176,9 +204,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--symbol", default=SYMBOL, help="Symbol (default: BTCUSDT)")
     parser.add_argument("--interval", default=INTERVAL, help="Candle interval (default: 5m)")
     parser.add_argument("--days", type=int, default=LOOKBACK_DAYS, help="Lookback days (default: 730)")
     args = parser.parse_args()
+    SYMBOL = args.symbol
     INTERVAL = args.interval
     LOOKBACK_DAYS = args.days
     main()

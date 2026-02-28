@@ -92,6 +92,7 @@ def interpret_signal(
     max_bet: float,
     max_bankroll_pct: float = 0.1,
     timeframe: str = "5m",
+    asset: str = "",
 ) -> BetDecision:
     """Read last row of strategy output and produce a BetDecision.
 
@@ -103,6 +104,7 @@ def interpret_signal(
         max_bet: Maximum bet amount from CLI/config
         max_bankroll_pct: Never risk more than this fraction of bankroll
         timeframe: Candle timeframe used — selects the correct REVERSAL_RATES table.
+        asset: Asset ticker (e.g. "BTC", "SOL") for asset-specific rates; "" → BTC table.
 
     Returns:
         BetDecision ready for trader.place_bet()
@@ -123,7 +125,7 @@ def interpret_signal(
 
     # Look up confidence from the timeframe-specific reversal rate table
     streak_len, streak_dir = detect_streak(outcomes)
-    confidence = get_reversal_rate(timeframe, streak_len)
+    confidence = get_reversal_rate(timeframe, streak_len, asset)
 
     # Calculate Kelly-optimal size
     odds = 1.0 / entry_price if entry_price > 0 else 2.0

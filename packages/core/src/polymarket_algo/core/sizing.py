@@ -45,14 +45,102 @@ REVERSAL_RATES: dict[str, dict[int, float]] = {
 DEFAULT_TRIGGERS: dict[str, int] = {"5m": 4, "15m": 6, "1h": 4}
 
 
-def get_reversal_rate(timeframe: str, trigger: int) -> float:
+@dataclass(frozen=True)
+class RateEstimate:
+    """95% Wilson score CI for a measured reversal rate."""
+
+    rate: float     # point estimate (measured win rate)
+    ci_lo: float    # 95% Wilson lower bound
+    ci_hi: float    # 95% Wilson upper bound
+    n_trades: int   # sample size
+
+    @property
+    def conservative(self) -> float:
+        """Lower CI bound — smaller bet when sample is thin (wide CI)."""
+        return self.ci_lo
+
+    @property
+    def ci_width(self) -> float:
+        return self.ci_hi - self.ci_lo
+
+
+# Per-asset 5m reversal rates — 730-day Binance backtest (2024-02-29 → 2026-02-28).
+# Wilson score CI z=1.96, ~210k candles per asset.
+ASSET_REVERSAL_RATES: dict[str, dict[str, dict[int, RateEstimate]]] = {
+    "BTC": {
+        "5m": {
+            2: RateEstimate(0.519, 0.516, 0.522, 104241),
+            3: RateEstimate(0.529, 0.525, 0.533,  50163),
+            4: RateEstimate(0.540, 0.533, 0.546,  23629),
+            5: RateEstimate(0.538, 0.528, 0.547,  10881),
+            6: RateEstimate(0.543, 0.529, 0.556,   5032),
+            7: RateEstimate(0.553, 0.533, 0.573,   2302),
+            8: RateEstimate(0.562, 0.531, 0.592,   1029),
+        },
+    },
+    "ETH": {
+        "5m": {
+            2: RateEstimate(0.526, 0.523, 0.529, 103547),
+            3: RateEstimate(0.536, 0.532, 0.541,  49053),
+            4: RateEstimate(0.550, 0.543, 0.556,  22746),
+            5: RateEstimate(0.557, 0.547, 0.567,  10240),
+            6: RateEstimate(0.554, 0.540, 0.569,   4536),
+            7: RateEstimate(0.542, 0.521, 0.564,   2021),
+            8: RateEstimate(0.544, 0.512, 0.576,    925),
+        },
+    },
+    "SOL": {
+        "5m": {
+            2: RateEstimate(0.517, 0.514, 0.520, 104649),
+            3: RateEstimate(0.525, 0.520, 0.529,  50551),
+            4: RateEstimate(0.535, 0.529, 0.542,  24033),
+            5: RateEstimate(0.544, 0.534, 0.553,  11166),
+            6: RateEstimate(0.547, 0.533, 0.561,   5096),
+            7: RateEstimate(0.544, 0.524, 0.564,   2309),
+            8: RateEstimate(0.541, 0.511, 0.571,   1053),
+        },
+    },
+    "XRP": {
+        "5m": {
+            2: RateEstimate(0.516, 0.513, 0.519, 104377),
+            3: RateEstimate(0.528, 0.523, 0.532,  50526),
+            4: RateEstimate(0.532, 0.526, 0.538,  23868),
+            5: RateEstimate(0.538, 0.529, 0.548,  11169),
+            6: RateEstimate(0.545, 0.531, 0.559,   5156),
+            7: RateEstimate(0.547, 0.527, 0.567,   2346),
+            8: RateEstimate(0.534, 0.504, 0.564,   1062),
+        },
+    },
+}
+
+
+def get_reversal_rate(timeframe: str, trigger: int, asset: str = "") -> float:
     """Return the measured win rate for a timeframe + trigger combination.
 
-    Falls back to the "5m" table if the timeframe is unknown, and clamps
-    trigger to the highest key in the table.
+    If `asset` is provided and present in ASSET_REVERSAL_RATES, returns the
+    asset-specific point estimate. Otherwise falls back to the legacy REVERSAL_RATES
+    table (BTC-derived). Clamps trigger to the highest key in the table.
+
+    Backward compatible: calling with two args (no asset) is identical to before.
     """
+    if asset and asset in ASSET_REVERSAL_RATES:
+        tf_data = ASSET_REVERSAL_RATES[asset].get(timeframe)
+        if tf_data:
+            return tf_data[min(trigger, max(tf_data))].rate
     rates = REVERSAL_RATES.get(timeframe, REVERSAL_RATES["5m"])
     return rates[min(trigger, max(rates))]
+
+
+def get_rate_estimate(timeframe: str, trigger: int, asset: str = "") -> "RateEstimate | None":
+    """Return the full RateEstimate (point + CI + n) for an asset/timeframe/trigger.
+
+    Returns None if the asset is unknown or has no data for the given timeframe.
+    """
+    if asset and asset in ASSET_REVERSAL_RATES:
+        tf_data = ASSET_REVERSAL_RATES[asset].get(timeframe)
+        if tf_data:
+            return tf_data[min(trigger, max(tf_data))]
+    return None
 
 
 @dataclass
