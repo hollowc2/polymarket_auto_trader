@@ -35,36 +35,61 @@ class ThreeBarMoMoStrategy:
         size_cap = float(config["size_cap"])
         min_body_pct = float(config["min_body_pct"])
 
-        # Body direction: close > open → 1, close < open → -1, doji → 0
         body = candles["close"] - candles["open"]
-        direction = body.apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+        # Vectorized direction: 1 (bullish), -1 (bearish), 0 (doji)
+        direction = (body > 0).astype(int) - (body < 0).astype(int)
         body_pct = body.abs() / candles["close"]
         volumes = candles["volume"]
 
-        signal = pd.Series(0, index=candles.index, dtype=int)
+        # All N bars same direction (non-zero)
+        all_bullish = (
+            (direction == 1)
+            .rolling(bars, min_periods=bars)
+            .min()
+            .fillna(0)
+            .astype(bool)
+        )
+        all_bearish = (
+            (direction == -1)
+            .rolling(bars, min_periods=bars)
+            .min()
+            .fillna(0)
+            .astype(bool)
+        )
+
+        # Strictly increasing volume: bars-1 consecutive positive diffs
+        if bars > 1:
+            all_vol_increasing = (
+                (volumes.diff() > 0)
+                .rolling(bars - 1, min_periods=bars - 1)
+                .min()
+                .fillna(0)
+                .astype(bool)
+            )
+        else:
+            all_vol_increasing = pd.Series(True, index=candles.index)
+
+        # Optional minimum body size filter
+        if min_body_pct > 0:
+            body_ok = (
+                (body_pct >= min_body_pct)
+                .rolling(bars, min_periods=bars)
+                .min()
+                .fillna(0)
+                .astype(bool)
+            )
+        else:
+            body_ok = pd.Series(True, index=candles.index)
+
+        # Volume ratio: last bar / first bar in the window, capped
+        vol_first = volumes.shift(bars - 1)
+        vol_ratio = (volumes / vol_first).clip(upper=size_cap).fillna(1.0)
+
+        bullish = all_bullish & all_vol_increasing & body_ok
+        bearish = all_bearish & all_vol_increasing & body_ok
+
+        signal = bullish.astype(int) - bearish.astype(int)
         size = pd.Series(0.0, index=candles.index)
-
-        for i in range(bars - 1, len(candles)):
-            window_dir = direction.iloc[i - bars + 1 : i + 1]
-            window_vol = volumes.iloc[i - bars + 1 : i + 1]
-            window_body = body_pct.iloc[i - bars + 1 : i + 1]
-
-            dir_val = window_dir.iloc[0]
-            # All bars same non-zero direction
-            if dir_val == 0 or not (window_dir == dir_val).all():
-                continue
-
-            # Strictly increasing volume
-            if not all(window_vol.iloc[j] > window_vol.iloc[j - 1] for j in range(1, bars)):
-                continue
-
-            # Optional minimum body size filter
-            if min_body_pct > 0 and not (window_body >= min_body_pct).all():
-                continue
-
-            # Volume-scaled size (capped)
-            vol_ratio = window_vol.iloc[-1] / window_vol.iloc[0]
-            signal.iloc[i] = dir_val
-            size.iloc[i] = size_val * min(vol_ratio, size_cap)
+        size[signal != 0] = size_val * vol_ratio[signal != 0]
 
         return pd.DataFrame({"signal": signal, "size": size}, index=candles.index)

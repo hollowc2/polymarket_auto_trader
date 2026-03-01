@@ -1,5 +1,8 @@
+from .bollinger_squeeze import BollingerSqueezeStrategy as BollingerSqueezeStrategy
 from .candle_direction import CandleDirectionStrategy as CandleDirectionStrategy
 from .copytrade import CopytradeStrategy as CopytradeStrategy
+from .pin_bar import PinBarReversalStrategy as PinBarReversalStrategy
 from .selective_filter import SelectiveFilter as SelectiveFilter
+from .session_filter import SessionFilter as SessionFilter
 from .streak_reversal import StreakReversalStrategy as StreakReversalStrategy
 from .three_bar_momo import ThreeBarMoMoStrategy as ThreeBarMoMoStrategy

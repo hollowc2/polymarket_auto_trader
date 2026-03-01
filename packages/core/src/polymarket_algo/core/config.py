@@ -91,3 +91,26 @@ class Config:
     SELECTIVE_MAX_SPREAD: float = float(os.getenv("SELECTIVE_MAX_SPREAD", "0.025"))
     SELECTIVE_MAX_VOLATILITY_FACTOR: float = float(os.getenv("SELECTIVE_MAX_VOLATILITY_FACTOR", "1.25"))
     SELECTIVE_MIN_DEPTH_AT_BEST: float = float(os.getenv("SELECTIVE_MIN_DEPTH_AT_BEST", "5.0"))
+
+    # Session filter — UTC hour ranges, e.g. "13-20" for US session, empty = no filter
+    SESSION_FILTER_HOURS: str = os.getenv("SESSION_FILTER_HOURS", "")
+
+    # Alternative entry features (streak_bot_alternative_entry.py)
+    ALT_ENTRY_USE_STREAK_FILTER: bool = os.getenv("ALT_ENTRY_USE_STREAK_FILTER", "true").lower() == "true"
+    ALT_ENTRY_MIN_STREAK: int = int(os.getenv("ALT_ENTRY_MIN_STREAK", "4"))
+    ALT_ENTRY_USE_PRICE_FLOOR: bool = os.getenv("ALT_ENTRY_USE_PRICE_FLOOR", "false").lower() == "true"
+    ALT_ENTRY_MAX_ENTRY_PRICE: float = float(os.getenv("ALT_ENTRY_MAX_ENTRY_PRICE", "0.44"))
+    ALT_ENTRY_USE_LIMIT_ORDERS: bool = os.getenv("ALT_ENTRY_USE_LIMIT_ORDERS", "true").lower() == "true"
+    ALT_ENTRY_FILL_WINDOW_SEC: int = int(os.getenv("ALT_ENTRY_FILL_WINDOW_SEC", "260"))
+    # Per-streak-length discount off the best ask (JSON string or Python dict literal).
+    # Example .env: ALT_ENTRY_DISCOUNTS='{"4": 0.05, "5": 0.07, "6": 0.10, "7": 0.13, "8": 0.15}'
+    _alt_entry_discounts_raw: str = os.getenv(
+        "ALT_ENTRY_DISCOUNTS", '{"4": 0.05, "5": 0.07, "6": 0.10, "7": 0.13, "8": 0.15}'
+    )
+    try:
+        import json as _json
+        ALT_ENTRY_DISCOUNTS: dict[int, float] = {
+            int(k): float(v) for k, v in _json.loads(_alt_entry_discounts_raw).items()
+        }
+    except Exception:
+        ALT_ENTRY_DISCOUNTS = {4: 0.05, 5: 0.07, 6: 0.10, 7: 0.13, 8: 0.15}
