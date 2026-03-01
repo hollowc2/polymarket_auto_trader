@@ -11,6 +11,7 @@ backtest_results/summary.json.
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -18,23 +19,19 @@ from typing import Any
 import pandas as pd
 from polymarket_algo.backtest.engine import parameter_sweep, run_backtest, walk_forward_split
 from polymarket_algo.strategies import (
-    BollingerSqueezeStrategy,
-    CandleDirectionStrategy,
-    PinBarReversalStrategy,
+    StreakADXStrategy,
     StreakReversalStrategy,
-    ThreeBarMoMoStrategy,
+    StreakRSIStrategy,
 )
 
 STRATEGIES = [
     StreakReversalStrategy,
-    ThreeBarMoMoStrategy,
-    BollingerSqueezeStrategy,
-    PinBarReversalStrategy,
-    CandleDirectionStrategy,
+    StreakRSIStrategy,
+    StreakADXStrategy,
 ]
 
 TIMEFRAMES = ["5m", "15m", "1h"]
-ASSETS = ["btc"]
+ASSETS = ["btc", "eth", "sol", "xrp"]
 
 STRATEGY_TARGETS = [
     (cls, asset, tf)
@@ -67,7 +64,11 @@ def main() -> None:
             print(f"[SKIP] Missing data: {data_path.name}")
             continue
 
-        strategy = StrategyClass()
+        sig = inspect.signature(StrategyClass.__init__)
+        if "asset" in sig.parameters:
+            strategy = StrategyClass(asset=asset.upper())
+        else:
+            strategy = StrategyClass()
         print(f"[RUN ] {strategy.name} / {asset} / {timeframe} ...", end=" ", flush=True)
 
         candles = load_candles(asset, timeframe)

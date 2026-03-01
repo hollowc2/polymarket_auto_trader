@@ -1,8 +1,16 @@
+from .adx import adx
 from .bollinger import bollinger_bands
 from .ema import ema
 from .macd import macd
 from .rsi import rsi
 from .sma import sma
+
+
+class ADXIndicator:
+    name = "adx"
+
+    def compute(self, high, low, close, **params):
+        return adx(high, low, close, period=int(params.get("period", 14)))
 
 
 class EMAIndicator:

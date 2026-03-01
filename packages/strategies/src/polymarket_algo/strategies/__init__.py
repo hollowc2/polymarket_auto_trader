@@ -4,5 +4,7 @@ from .copytrade import CopytradeStrategy as CopytradeStrategy
 from .pin_bar import PinBarReversalStrategy as PinBarReversalStrategy
 from .selective_filter import SelectiveFilter as SelectiveFilter
 from .session_filter import SessionFilter as SessionFilter
+from .streak_adx import StreakADXStrategy as StreakADXStrategy
 from .streak_reversal import StreakReversalStrategy as StreakReversalStrategy
+from .streak_rsi import StreakRSIStrategy as StreakRSIStrategy
 from .three_bar_momo import ThreeBarMoMoStrategy as ThreeBarMoMoStrategy
