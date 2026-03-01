@@ -35,6 +35,7 @@ def strategy() -> ThreeBarMoMoStrategy:
 # Direction tests
 # ---------------------------------------------------------------------------
 
+
 def test_bullish_setup_fires(strategy):
     """3 bullish bars with strictly increasing volume → signal=1 on last bar."""
     candles = make_candles(
@@ -60,6 +61,7 @@ def test_bearish_setup_fires(strategy):
 # ---------------------------------------------------------------------------
 # Volume condition
 # ---------------------------------------------------------------------------
+
 
 def test_flat_volume_no_signal(strategy):
     """Bullish bars but flat volume → no signal."""
@@ -87,6 +89,7 @@ def test_decreasing_volume_no_signal(strategy):
 # Direction condition
 # ---------------------------------------------------------------------------
 
+
 def test_doji_middle_bar_no_signal(strategy):
     """Doji (open == close) in the middle → no signal."""
     candles = make_candles(
@@ -112,6 +115,7 @@ def test_mixed_direction_no_signal(strategy):
 # ---------------------------------------------------------------------------
 # min_body_pct filter
 # ---------------------------------------------------------------------------
+
 
 def test_min_body_pct_blocks_tiny_candles(strategy):
     """Tiny body candles fail min_body_pct filter when enabled."""
@@ -152,6 +156,7 @@ def test_min_body_pct_zero_disabled(strategy):
 # bars parameter
 # ---------------------------------------------------------------------------
 
+
 def test_bars_2_fires(strategy):
     """bars=2 with a 2-bar bullish+increasing-vol setup → signal=1."""
     candles = make_candles(
@@ -189,6 +194,7 @@ def test_bars_4_fires_with_four_qualifying_bars(strategy):
 # Rolling window: fires on every qualifying bar
 # ---------------------------------------------------------------------------
 
+
 def test_rolling_window_fires_on_continuation(strategy):
     """With 5 consecutive qualifying bars and bars=3, rows 2,3,4 all fire."""
     candles = make_candles(
@@ -204,6 +210,7 @@ def test_rolling_window_fires_on_continuation(strategy):
 # ---------------------------------------------------------------------------
 # Size scaling
 # ---------------------------------------------------------------------------
+
 
 def test_size_scales_with_vol_ratio(strategy):
     """Size = base_size * (vol_last / vol_first), not exceeding size_cap."""
@@ -243,6 +250,7 @@ def test_no_signal_rows_have_zero_size(strategy):
 # ---------------------------------------------------------------------------
 # Backtest smoke test
 # ---------------------------------------------------------------------------
+
 
 def test_backtest_smoke(strategy):
     """run_backtest with ThreeBarMoMoStrategy returns a valid BacktestResult."""

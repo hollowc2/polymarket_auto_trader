@@ -61,7 +61,7 @@ def main():
     # ── By direction ──────────────────────────────────────────────────────────
     print("Fill prices by direction (vs 0.50 baseline):")
     print(f"  {'Direction':<10} {'Count':>5} {'Avg Entry':>10} {'Avg Fill':>10} {'vs 0.50':>8}")
-    print(f"  {'-'*10} {'-'*5} {'-'*10} {'-'*10} {'-'*8}")
+    print(f"  {'-' * 10} {'-' * 5} {'-' * 10} {'-' * 10} {'-' * 8}")
     for direction in ("up", "down"):
         fills = by_direction.get(direction, [])
         if not fills:
@@ -96,7 +96,7 @@ def main():
     print("\n\nFill prices by best_ask at entry (proxy for market sentiment/streak):")
     print("  (Lower ask = crowd expects DOWN more strongly → better reversal opportunity)")
     print(f"\n  {'Ask bucket':<12} {'Count':>5} {'Avg Fill':>10} {'vs 0.50':>8} {'Win rate':>9}")
-    print(f"  {'-'*12} {'-'*5} {'-'*10} {'-'*8} {'-'*9}")
+    print(f"  {'-' * 12} {'-' * 5} {'-' * 10} {'-' * 8} {'-' * 9}")
 
     buckets: dict[str, list] = defaultdict(list)
     for t in settled:
@@ -133,17 +133,15 @@ def main():
         if t.get("execution", {}).get("slippage_pct", 0.0) > 0
     ]
     spreads = [
-        t.get("execution", {}).get("spread", 0.0)
-        for t in settled
-        if t.get("execution", {}).get("spread", 0.0) > 0
+        t.get("execution", {}).get("spread", 0.0) for t in settled if t.get("execution", {}).get("spread", 0.0) > 0
     ]
 
     print("\n\nExecution quality summary (settled trades):")
     if slippages:
-        print(f"  Avg slippage : {sum(slippages)/len(slippages):.4f}%  (n={len(slippages)})")
+        print(f"  Avg slippage : {sum(slippages) / len(slippages):.4f}%  (n={len(slippages)})")
         print(f"  Max slippage : {max(slippages):.4f}%")
     if spreads:
-        print(f"  Avg spread   : {sum(spreads)/len(spreads)*100:.2f}¢")
+        print(f"  Avg spread   : {sum(spreads) / len(spreads) * 100:.2f}¢")
     if ask_at_entries and fill_prices:
         # How much above the best_ask did we actually pay on average?
         overpay = []
@@ -156,7 +154,7 @@ def main():
         if overpay:
             avg_overpay = sum(overpay) / len(overpay)
             sign = "+" if avg_overpay >= 0 else ""
-            print(f"  Avg overpay  : {sign}{avg_overpay*100:.2f}¢ above best_ask")
+            print(f"  Avg overpay  : {sign}{avg_overpay * 100:.2f}¢ above best_ask")
 
     # ── EV impact of limit orders ─────────────────────────────────────────────
     print("\n\nEstimated EV impact of 3¢ limit discount:")

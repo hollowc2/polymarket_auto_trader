@@ -21,32 +21,60 @@ BASE_URL = "https://api.binance.com/api/v3/klines"
 # Bybit — globally accessible on most hosts, deep history (5m back to 2020+)
 BYBIT_BASE_URL = "https://api.bybit.com/v5/market/kline"
 BYBIT_INTERVAL_MAP = {
-    "1m": "1", "5m": "5", "15m": "15", "30m": "30",
-    "1h": "60", "2h": "120", "4h": "240", "1d": "D",
+    "1m": "1",
+    "5m": "5",
+    "15m": "15",
+    "30m": "30",
+    "1h": "60",
+    "2h": "120",
+    "4h": "240",
+    "1d": "D",
 }
 BYBIT_MAX_LIMIT = 1000
 
 # OKX — EU-accessible, full history back to 2022, 300 candles/request
 OKX_BASE_URL = "https://www.okx.com/api/v5/market/history-candles"
 OKX_INTERVAL_MAP = {
-    "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
-    "1h": "1H", "2h": "2H", "4h": "4H", "1d": "1D",
+    "1m": "1m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1H",
+    "2h": "2H",
+    "4h": "4H",
+    "1d": "1D",
 }
 OKX_MAX_LIMIT = 300
 
 # Gate.io fallback (global availability, real exchange OHLCV)
 GATEIO_BASE_URL = "https://api.gateio.ws/api/v4/spot/candlesticks"
 GATEIO_INTERVAL_MAP = {
-    "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
-    "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "8h": "8h", "1d": "1d",
+    "1m": "1m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1h",
+    "2h": "2h",
+    "4h": "4h",
+    "6h": "6h",
+    "8h": "8h",
+    "1d": "1d",
 }
 GATEIO_MAX_LIMIT = 1000
 # Gate.io enforces a max lookback of 10 000 candles per interval.
 # Depths (approx): 5m→34d, 15m→104d, 1h→416d, 4h→1666d
 GATEIO_MAX_CANDLES = 9_900  # stay slightly under the hard limit
 _INTERVAL_SECONDS: dict[str, int] = {
-    "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
-    "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800, "1d": 86400,
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+    "2h": 7200,
+    "4h": 14400,
+    "6h": 21600,
+    "8h": 28800,
+    "1d": 86400,
 }
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT"]
@@ -114,11 +142,22 @@ def _bybit_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.
     df["taker_buy_quote_asset_volume"] = float("nan")
     df["ignore"] = float("nan")
 
-    return df[[
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore",
-    ]]
+    return df[
+        [
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_asset_volume",
+            "number_of_trades",
+            "taker_buy_base_asset_volume",
+            "taker_buy_quote_asset_volume",
+            "ignore",
+        ]
+    ]
 
 
 def _okx_symbol(symbol: str) -> str:
@@ -173,10 +212,20 @@ def _okx_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.Da
         return pd.DataFrame()
 
     # Filter to requested range and sort ascending
-    df = pd.DataFrame(rows, columns=[
-        "open_time_ms", "open", "high", "low", "close", "volume",
-        "vol_ccy", "quote_asset_volume", "confirm",
-    ])
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "open_time_ms",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "vol_ccy",
+            "quote_asset_volume",
+            "confirm",
+        ],
+    )
     df["open_time_ms"] = pd.to_numeric(df["open_time_ms"])
     df = df[df["open_time_ms"] >= start_ms]
     df = df.drop_duplicates(subset=["open_time_ms"]).sort_values("open_time_ms").reset_index(drop=True)
@@ -191,11 +240,22 @@ def _okx_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.Da
     df["taker_buy_quote_asset_volume"] = float("nan")
     df["ignore"] = float("nan")
 
-    return df[[
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore",
-    ]]
+    return df[
+        [
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_asset_volume",
+            "number_of_trades",
+            "taker_buy_base_asset_volume",
+            "taker_buy_quote_asset_volume",
+            "ignore",
+        ]
+    ]
 
 
 def _gateio_symbol(symbol: str) -> str:
@@ -226,8 +286,10 @@ def _gateio_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd
     cursor_sec = max(start_ms // 1000, max_lookback_start)
     if cursor_sec > start_ms // 1000:
         actual = datetime.fromtimestamp(cursor_sec, tz=UTC).date()
-        print(f"[data] Gate.io {interval}: history capped at {GATEIO_MAX_CANDLES} candles; "
-              f"fetching from {actual}", flush=True)
+        print(
+            f"[data] Gate.io {interval}: history capped at {GATEIO_MAX_CANDLES} candles; fetching from {actual}",
+            flush=True,
+        )
 
     while cursor_sec < end_sec:
         # Gate.io requires (to - from) / interval_secs < limit — compute a page-sized window.
@@ -258,17 +320,25 @@ def _gateio_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd
         return pd.DataFrame()
 
     # Parse: [ts_sec, quote_vol, close, high, low, open, base_vol, is_closed]
-    df = pd.DataFrame(rows, columns=[
-        "open_time_sec", "quote_asset_volume", "close", "high", "low", "open", "volume", "is_closed",
-    ])
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "open_time_sec",
+            "quote_asset_volume",
+            "close",
+            "high",
+            "low",
+            "open",
+            "volume",
+            "is_closed",
+        ],
+    )
     df = df.drop_duplicates(subset=["open_time_sec"]).sort_values("open_time_sec").reset_index(drop=True)
 
     for col in ["open", "high", "low", "close", "volume", "quote_asset_volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df["open_time"] = pd.to_datetime(
-        pd.to_numeric(df["open_time_sec"]) * 1000, unit="ms", utc=True
-    )
+    df["open_time"] = pd.to_datetime(pd.to_numeric(df["open_time_sec"]) * 1000, unit="ms", utc=True)
 
     # Fill columns not provided by Gate.io so the schema matches Binance output
     df["close_time"] = pd.NaT
@@ -277,11 +347,22 @@ def _gateio_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd
     df["taker_buy_quote_asset_volume"] = float("nan")
     df["ignore"] = float("nan")
 
-    return df[[
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore",
-    ]]
+    return df[
+        [
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_asset_volume",
+            "number_of_trades",
+            "taker_buy_base_asset_volume",
+            "taker_buy_quote_asset_volume",
+            "ignore",
+        ]
+    ]
 
 
 def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.DataFrame:

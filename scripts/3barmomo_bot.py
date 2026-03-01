@@ -221,10 +221,7 @@ def main():
             # and never more than 10% of bankroll
             bet_size = max(1.0, min(last_size, bet_amount, state.bankroll * 0.1))
 
-            log(
-                f"Signal: {direction.upper()} | vol-scaled size=${last_size:.2f} "
-                f"-> capped=${bet_size:.2f}"
-            )
+            log(f"Signal: {direction.upper()} | vol-scaled size=${last_size:.2f} -> capped=${bet_size:.2f}")
 
             # === PLACE BET ===
             trade = trader.place_bet(

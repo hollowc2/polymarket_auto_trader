@@ -125,8 +125,8 @@ Related Commands:
 
     trigger = args.trigger or Config.STREAK_TRIGGER
     bet_amount = args.amount or Config.BET_AMOUNT
-    max_daily_bets = args.max_bets or Config.MAX_DAILY_BETS
-    max_daily_loss = args.max_loss or Config.MAX_DAILY_LOSS
+    Config.MAX_DAILY_BETS = args.max_bets or Config.MAX_DAILY_BETS
+    Config.MAX_DAILY_LOSS = args.max_loss or Config.MAX_DAILY_LOSS
 
     # Init
     client = PolymarketClient()
@@ -142,12 +142,9 @@ Related Commands:
         log("LIVE trading mode - Real money!")
 
     log(f"Config: trigger={trigger}, amount=${bet_amount}, bankroll=${state.bankroll:.2f}")
-    log(f"Limits: max_bets={max_daily_bets}/day, max_loss=${max_daily_loss}")
+    log(f"Limits: max_bets={Config.MAX_DAILY_BETS}/day, max_loss=${Config.MAX_DAILY_LOSS}")
     log(f"Timezone: {TIMEZONE_NAME}")
 
-    log(f"Strategy: streak trigger={trigger}, bet=${bet_amount:.2f}")
-    log(f"Bankroll: ${state.bankroll:.2f}")
-    log(f"Limits: max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day")
     log("")
 
     # Track what we've already bet on

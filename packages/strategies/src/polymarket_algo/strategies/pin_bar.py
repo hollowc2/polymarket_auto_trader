@@ -39,14 +39,10 @@ class PinBarReversalStrategy:
 
         body_ratio = body / total_range
         bullish_pin = (
-            (body_ratio < body_threshold)
-            & (lower_wick / total_range > wick_threshold)
-            & (lower_wick > upper_wick)
+            (body_ratio < body_threshold) & (lower_wick / total_range > wick_threshold) & (lower_wick > upper_wick)
         )
         bearish_pin = (
-            (body_ratio < body_threshold)
-            & (upper_wick / total_range > wick_threshold)
-            & (upper_wick > lower_wick)
+            (body_ratio < body_threshold) & (upper_wick / total_range > wick_threshold) & (upper_wick > lower_wick)
         )
 
         signal = bullish_pin.astype(int) - bearish_pin.astype(int)

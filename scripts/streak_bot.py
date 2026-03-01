@@ -63,14 +63,13 @@ def main():
         choices=["5m", "15m", "1h"],
         default=Config.TIMEFRAME,
         help="Analysis timeframe (default: %(default)s). Affects trigger default, "
-             "outcome aggregation, and reversal-rate confidence table.",
+        "outcome aggregation, and reversal-rate confidence table.",
     )
     parser.add_argument(
         "--trigger",
         type=int,
         metavar="N",
-        help="Streak trigger length. Defaults to the best-Sharpe value for the "
-             "chosen timeframe (5m→4, 15m→6, 1h→4).",
+        help="Streak trigger length. Defaults to the best-Sharpe value for the chosen timeframe (5m→4, 15m→6, 1h→4).",
     )
     parser.add_argument("--amount", type=float, metavar="USD", help=f"Max bet amount (default: {Config.BET_AMOUNT})")
     parser.add_argument("--bankroll", type=float, metavar="USD", help="Override starting bankroll")
@@ -109,8 +108,10 @@ def main():
         log("LIVE trading mode - Real money!")
 
     log(f"Strategy : {strategy.name}")
-    log(f"Timeframe: {timeframe}  (fires every {window_seconds // 60} min, "
-        f"trigger={trigger}, group={group_size} outcomes/bar)")
+    log(
+        f"Timeframe: {timeframe}  (fires every {window_seconds // 60} min, "
+        f"trigger={trigger}, group={group_size} outcomes/bar)"
+    )
     log(f"Max bet  : ${bet_amount:.2f} | Bankroll: ${state.bankroll:.2f}")
     log(f"Limits   : max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day")
     log(f"Timezone : {TIMEZONE_NAME}")
@@ -126,7 +127,7 @@ def main():
             current_5m = (now // 300) * 300
             seconds_into_5m = now - current_5m
             next_5m = current_5m + 300
-            target_ts = next_5m          # the Polymarket market to bet on
+            target_ts = next_5m  # the Polymarket market to bet on
             seconds_until_target = target_ts - now
 
             # === SETTLE PENDING TRADES ===
@@ -190,7 +191,7 @@ def main():
                 time.sleep(5)
                 continue
 
-            log(f"{timeframe} bars: {' -> '.join(o.upper() for o in outcomes[-trigger - 2:])}")
+            log(f"{timeframe} bars: {' -> '.join(o.upper() for o in outcomes[-trigger - 2 :])}")
 
             # === EVALUATE VIA STRATEGY PROTOCOL ===
             candles = outcomes_to_candles(outcomes)

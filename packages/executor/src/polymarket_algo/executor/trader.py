@@ -128,6 +128,13 @@ class Trade:
     settlement_status: str = "pending"  # "pending", "settled", or "force_exit"
     force_exit_reason: str | None = None  # "insufficient_bankroll" or "shutdown" (only when force_exit)
 
+    # === LIMIT ORDER FIELDS ===
+    order_type: str = "market"  # "market" | "limit"
+    limit_price: float | None = None  # Requested limit price (GTC orders)
+    limit_order_id: str | None = None  # Live CLOB order ID for cancellation
+    cancelled_at: int | None = None  # ms timestamp when limit was cancelled
+    missed: bool = False  # True if limit order expired unfilled
+
     # Fields that are only valid during pending state and should not be persisted to JSON
     TRANSIENT_FIELDS = {"current_price", "unrealized_pnl", "implied_outcome"}
 
@@ -1276,6 +1283,161 @@ class PaperTrader:
             print(f"        Fee: {fee_pct:.2%} | Spread: {spread_cents:.0f}¢ | Slippage: {slippage_pct:.2f}%")
         return trade
 
+    def place_limit_bet(
+        self,
+        market: Market,
+        direction: str,
+        amount: float,
+        limit_price: float,
+        confidence: float,
+        streak_length: int,
+    ) -> Trade | None:
+        """Create a pending GTC limit trade (paper simulation).
+
+        Does NOT simulate fill immediately. Caller must poll check_limit_fill()
+        and handle expiry via cancel_limit_bet().
+
+        Returns None if below minimum order size.
+        """
+        if amount < Config.MIN_BET:
+            print(f"[PAPER] Limit rejected: ${amount:.2f} below minimum ${Config.MIN_BET:.2f}")
+            return None
+
+        entry_price = market.up_price if direction == "up" else market.down_price
+        if entry_price <= 0:
+            entry_price = 0.5
+        executed_at = int(time.time() * 1000)
+
+        fee_rate_bps = market.taker_fee_bps if hasattr(market, "taker_fee_bps") else 1000
+        fee_pct = self._client.calculate_fee(limit_price, fee_rate_bps)
+
+        exec_dt = datetime.fromtimestamp(executed_at / 1000, tz=UTC)
+        window_start = market.timestamp
+        seconds_into_window = int(executed_at / 1000) - window_start
+        window_close_time = window_start + 300
+        opposite_price = market.down_price if direction == "up" else market.up_price
+        price_ratio = entry_price / opposite_price if opposite_price > 0 else 1.0
+        if market.up_price > 0.52:
+            market_bias = "bullish"
+        elif market.down_price > 0.52:
+            market_bias = "bearish"
+        else:
+            market_bias = "neutral"
+
+        trade = Trade(
+            timestamp=market.timestamp,
+            market_slug=market.slug,
+            direction=direction,
+            amount=amount,
+            entry_price=entry_price,
+            streak_length=streak_length,
+            confidence=confidence,
+            paper=True,
+            executed_at=executed_at,
+            market_price_at_copy=entry_price,
+            fee_rate_bps=fee_rate_bps,
+            fee_pct=fee_pct,
+            requested_amount=amount,
+            price_at_signal=entry_price,
+            market_volume=market.volume if hasattr(market, "volume") else 0.0,
+            hour_utc=exec_dt.hour,
+            minute_of_hour=exec_dt.minute,
+            day_of_week=exec_dt.weekday(),
+            seconds_into_window=seconds_into_window,
+            window_close_time=window_close_time,
+            opposite_price=opposite_price,
+            price_ratio=price_ratio,
+            market_bias=market_bias,
+            # Limit order fields
+            order_type="limit",
+            limit_price=limit_price,
+            order_status="pending",
+            settlement_status="pending",
+        )
+
+        print(
+            f"[PAPER] Limit bid ${amount:.2f} {direction.upper()} @ {limit_price:.4f} "
+            f"(ask={entry_price:.4f}) | streak={streak_length}"
+        )
+        return trade
+
+    def check_limit_fill(self, trade: Trade) -> bool:
+        """Check if a pending limit order has been filled by querying the orderbook.
+
+        Returns True if the current best ask is at or below the limit price
+        (i.e., we could have been filled). Updates trade.execution_price on fill.
+        """
+        token_id = None
+        try:
+            market = self._client.get_market(trade.timestamp)
+            if not market:
+                return False
+            token_id = market.up_token_id if trade.direction == "up" else market.down_token_id
+        except Exception:
+            return False
+
+        if not token_id:
+            return False
+
+        try:
+            # Try spread endpoint first (fastest)
+            spread = self._client.get_spread(token_id)
+            if spread:
+                _bid, current_ask = spread
+            else:
+                current_ask_maybe = self._client.get_price(token_id, side="BUY")
+                current_ask = current_ask_maybe if current_ask_maybe else 1.0
+        except Exception:
+            return False
+
+        if trade.limit_price is None:
+            return False
+
+        if current_ask <= trade.limit_price:
+            # Simulate fill at the limit price (we get the price we asked for)
+            trade.execution_price = trade.limit_price
+            trade.price_at_execution = trade.limit_price
+            trade.order_status = "filled"
+            fee_rate_bps = trade.fee_rate_bps or 1000
+            trade.fee_pct = self._client.calculate_fee(trade.limit_price, fee_rate_bps)
+            return True
+        return False
+
+    def cancel_limit_bet(self, trade: Trade, missed_log_path: str = "missed_orders.json") -> None:
+        """Mark a limit trade as missed/expired and log it to missed_orders.json."""
+        trade.missed = True
+        trade.cancelled_at = int(time.time() * 1000)
+        trade.order_status = "cancelled"
+
+        record = {
+            "timestamp": trade.cancelled_at,
+            "slug": trade.market_slug,
+            "direction": trade.direction,
+            "streak_length": trade.streak_length,
+            "limit_price": trade.limit_price,
+            "ask_at_placement": trade.entry_price,
+            "discount_applied": round(trade.entry_price - (trade.limit_price or 0), 4),
+            "fill_window_sec": Config.ALT_ENTRY_FILL_WINDOW_SEC,
+            "paper": True,
+        }
+
+        existing: list = []
+        if os.path.exists(missed_log_path):
+            try:
+                with open(missed_log_path) as f:
+                    existing = json.load(f)
+            except Exception:
+                existing = []
+
+        existing.append(record)
+        with open(missed_log_path, "w") as f:
+            json.dump(existing, f, indent=2)
+
+        print(
+            f"[PAPER] Limit expired: {trade.direction.upper()} @ {trade.limit_price:.4f} "
+            f"(slug={trade.market_slug}) → logged to {missed_log_path}"
+        )
+
 
 class LiveTrader:
     """Live trading via Polymarket CLOB API.
@@ -1546,4 +1708,161 @@ class LiveTrader:
             price_at_signal=entry_price,
             price_at_execution=execution_price,
             **kwargs,  # pass copytrade fields
+        )
+
+    def place_limit_bet(
+        self,
+        market: Market,
+        direction: str,
+        amount: float,
+        limit_price: float,
+        confidence: float,
+        streak_length: int,
+    ) -> Trade | None:
+        """Place a GTC limit order on the live CLOB.
+
+        Returns a Trade with order_type="limit" and outcome=None.
+        The caller must poll check_limit_fill() and cancel via cancel_limit_bet().
+        """
+        is_valid, error_msg = self._validate_order(market, direction, amount)
+        if not is_valid:
+            print(f"[LIVE] Limit rejected: {error_msg}")
+            return None
+
+        token_id = market.up_token_id if direction == "up" else market.down_token_id
+        if token_id is None:
+            return None
+
+        entry_price = market.up_price if direction == "up" else market.down_price
+        if entry_price <= 0:
+            entry_price = 0.5
+        executed_at = int(time.time() * 1000)
+        fee_rate_bps = market.taker_fee_bps if hasattr(market, "taker_fee_bps") else 1000
+        fee_pct = PolymarketClient.calculate_fee(limit_price, fee_rate_bps)
+
+        clob_order_id: str | None = None
+        order_status = "pending"
+
+        try:
+            # shares = USD / price
+            shares = round(amount / limit_price, 4) if limit_price > 0 else 0.0
+            order_args = self.OrderArgs(
+                token_id=token_id,
+                price=limit_price,
+                size=shares,
+                side=self.BUY,
+            )
+            signed_order = self.client.create_order(order_args)
+            response = self.client.post_order(signed_order, self.OrderType.GTC)  # type: ignore[invalid-argument-type]
+
+            resp_dict: dict = response if isinstance(response, dict) else {}
+            clob_order_id = resp_dict.get("orderID", resp_dict.get("id"))
+            order_status = "submitted"
+            print(
+                f"[LIVE] Limit bid ${amount:.2f} {direction.upper()} @ {limit_price:.4f} "
+                f"| streak={streak_length} | order={clob_order_id} (GTC)"
+            )
+        except Exception as e:
+            print(f"[LIVE] Limit order failed: {e}")
+            order_status = "failed"
+            return None
+
+        exec_dt = datetime.fromtimestamp(executed_at / 1000, tz=UTC)
+        return Trade(
+            timestamp=market.timestamp,
+            market_slug=market.slug,
+            direction=direction,
+            amount=amount,
+            entry_price=entry_price,
+            streak_length=streak_length,
+            confidence=confidence,
+            paper=False,
+            order_id=clob_order_id,
+            executed_at=executed_at,
+            market_price_at_copy=entry_price,
+            fee_rate_bps=fee_rate_bps,
+            fee_pct=fee_pct,
+            requested_amount=amount,
+            price_at_signal=entry_price,
+            hour_utc=exec_dt.hour,
+            minute_of_hour=exec_dt.minute,
+            day_of_week=exec_dt.weekday(),
+            seconds_into_window=int(executed_at / 1000) - market.timestamp,
+            window_close_time=market.timestamp + 300,
+            market_volume=market.volume if hasattr(market, "volume") else 0.0,
+            order_status=order_status,
+            # Limit order fields
+            order_type="limit",
+            limit_price=limit_price,
+            limit_order_id=clob_order_id,
+        )
+
+    def check_limit_fill(self, trade: Trade) -> bool:
+        """Check if a live GTC limit order has been filled.
+
+        Returns True if filled; updates trade.execution_price on fill.
+        """
+        order_id = trade.limit_order_id or trade.order_id
+        if not order_id:
+            return False
+
+        try:
+            order = self.client.get_order(order_id)
+            if not isinstance(order, dict):
+                return False
+            status = order.get("status", "").upper()
+
+            if status in ("FILLED", "MATCHED"):
+                size_matched = float(order.get("size_matched", order.get("size", 0)))
+                avg_price = float(order.get("price", trade.limit_price or 0))
+                trade.execution_price = avg_price
+                trade.price_at_execution = avg_price
+                trade.shares_bought = size_matched
+                trade.order_status = "filled"
+                return True
+        except Exception as e:
+            print(f"[LIVE] Error checking limit fill for {order_id}: {e}")
+
+        return False
+
+    def cancel_limit_bet(self, trade: Trade, missed_log_path: str = "missed_orders.json") -> None:
+        """Cancel a live GTC limit order and log it as missed."""
+        order_id = trade.limit_order_id or trade.order_id
+        if order_id:
+            try:
+                self.client.cancel({"orderID": order_id})
+            except Exception as e:
+                print(f"[LIVE] Error cancelling order {order_id}: {e}")
+
+        trade.missed = True
+        trade.cancelled_at = int(time.time() * 1000)
+        trade.order_status = "cancelled"
+
+        record = {
+            "timestamp": trade.cancelled_at,
+            "slug": trade.market_slug,
+            "direction": trade.direction,
+            "streak_length": trade.streak_length,
+            "limit_price": trade.limit_price,
+            "ask_at_placement": trade.entry_price,
+            "discount_applied": round(trade.entry_price - (trade.limit_price or 0), 4),
+            "fill_window_sec": Config.ALT_ENTRY_FILL_WINDOW_SEC,
+            "paper": False,
+        }
+
+        existing: list = []
+        if os.path.exists(missed_log_path):
+            try:
+                with open(missed_log_path) as f:
+                    existing = json.load(f)
+            except Exception:
+                existing = []
+
+        existing.append(record)
+        with open(missed_log_path, "w") as f:
+            json.dump(existing, f, indent=2)
+
+        print(
+            f"[LIVE] Limit expired: {trade.direction.upper()} @ {trade.limit_price:.4f} "
+            f"(order={order_id}) → logged to {missed_log_path}"
         )

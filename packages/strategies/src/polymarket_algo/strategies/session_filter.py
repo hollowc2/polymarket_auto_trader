@@ -22,7 +22,7 @@ class SessionFilter:
         if not self.allowed_hours:
             return signals
 
-        hour = candles.index.hour  # UTC
+        hour = candles.index.hour  # type: ignore[union-attr]  # UTC
         in_session = pd.Series(False, index=candles.index)
         for start, end in self.allowed_hours:
             in_session |= (hour >= start) & (hour <= end)

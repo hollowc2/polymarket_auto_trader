@@ -31,8 +31,7 @@ def _fetch_klines_vision(symbol: str, interval: str, start_ms: int, end_ms: int)
     while cursor < end_ms:
         resp = requests.get(
             _VISION_URL,
-            params={"symbol": symbol, "interval": interval,
-                    "startTime": cursor, "endTime": end_ms, "limit": 1000},
+            params={"symbol": symbol, "interval": interval, "startTime": cursor, "endTime": end_ms, "limit": 1000},
             timeout=30,
         )
         resp.raise_for_status()
@@ -46,9 +45,20 @@ def _fetch_klines_vision(symbol: str, interval: str, start_ms: int, end_ms: int)
         cursor = last_open + 1
         time.sleep(0.1)
 
-    cols = ["open_time", "open", "high", "low", "close", "volume",
-            "close_time", "quote_asset_volume", "number_of_trades",
-            "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"]
+    cols = [
+        "open_time",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "close_time",
+        "quote_asset_volume",
+        "number_of_trades",
+        "taker_buy_base_asset_volume",
+        "taker_buy_quote_asset_volume",
+        "ignore",
+    ]
     df = pd.DataFrame(rows, columns=cols)
     if df.empty:
         return df
@@ -82,7 +92,7 @@ def win_rate_by_trigger(candles: pd.DataFrame, strategy: StreakReversalStrategy)
     hdr = f"  {'trig':>4}  {'trades':>7}  {'win_rate':>9}  {'95% CI':>15}"
     hdr += f"  {'±':>6}  {'poly':>6}  {'poly CI':>15}  {'delta':>7}"
     print(hdr)
-    sep = f"  {'-'*4}  {'-'*7}  {'-'*9}  {'-'*15}  {'-'*6}  {'-'*6}  {'-'*15}  {'-'*7}"
+    sep = f"  {'-' * 4}  {'-' * 7}  {'-' * 9}  {'-' * 15}  {'-' * 6}  {'-' * 6}  {'-' * 15}  {'-' * 7}"
     print(sep)
     for trigger in [2, 3, 4, 5, 6, 7, 8]:
         result = run_backtest(candles, strategy, {"trigger": trigger, "size": 15.0})

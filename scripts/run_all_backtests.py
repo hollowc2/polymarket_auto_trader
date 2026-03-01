@@ -33,12 +33,7 @@ STRATEGIES = [
 TIMEFRAMES = ["5m", "15m", "1h"]
 ASSETS = ["btc", "eth", "sol", "xrp"]
 
-STRATEGY_TARGETS = [
-    (cls, asset, tf)
-    for cls in STRATEGIES
-    for asset in ASSETS
-    for tf in TIMEFRAMES
-]
+STRATEGY_TARGETS = [(cls, asset, tf) for cls in STRATEGIES for asset in ASSETS for tf in TIMEFRAMES]
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 OUT_DIR = Path(__file__).resolve().parents[1] / "backtest_results"
@@ -66,7 +61,7 @@ def main() -> None:
 
         sig = inspect.signature(StrategyClass.__init__)
         if "asset" in sig.parameters:
-            strategy = StrategyClass(asset=asset.upper())
+            strategy = StrategyClass(asset=asset.upper())  # type: ignore[call-arg]
         else:
             strategy = StrategyClass()
         print(f"[RUN ] {strategy.name} / {asset} / {timeframe} ...", end=" ", flush=True)

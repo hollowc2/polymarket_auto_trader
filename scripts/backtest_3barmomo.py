@@ -29,8 +29,7 @@ def _fetch_klines_vision(symbol: str, interval: str, start_ms: int, end_ms: int)
     while cursor < end_ms:
         resp = requests.get(
             _VISION_URL,
-            params={"symbol": symbol, "interval": interval,
-                    "startTime": cursor, "endTime": end_ms, "limit": 1000},
+            params={"symbol": symbol, "interval": interval, "startTime": cursor, "endTime": end_ms, "limit": 1000},
             timeout=30,
         )
         resp.raise_for_status()
@@ -44,9 +43,20 @@ def _fetch_klines_vision(symbol: str, interval: str, start_ms: int, end_ms: int)
         cursor = last_open + 1
         time.sleep(0.1)
 
-    cols = ["open_time", "open", "high", "low", "close", "volume",
-            "close_time", "quote_asset_volume", "number_of_trades",
-            "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"]
+    cols = [
+        "open_time",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "close_time",
+        "quote_asset_volume",
+        "number_of_trades",
+        "taker_buy_base_asset_volume",
+        "taker_buy_quote_asset_volume",
+        "ignore",
+    ]
     df = pd.DataFrame(rows, columns=cols)
     if df.empty:
         return df
@@ -94,8 +104,11 @@ def main() -> None:
     print("=" * 60)
     sweep = parameter_sweep(train, strategy, strategy.param_grid)
     top10 = sweep.head(10)
-    print(top10[["bars", "size", "size_cap", "min_body_pct",
-                  "win_rate", "total_pnl", "trade_count", "sharpe_ratio"]].to_string(index=False))
+    print(
+        top10[
+            ["bars", "size", "size_cap", "min_body_pct", "win_rate", "total_pnl", "trade_count", "sharpe_ratio"]
+        ].to_string(index=False)
+    )
     print()
 
     # --- Best params evaluated on held-out test set ---

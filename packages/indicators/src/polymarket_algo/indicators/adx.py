@@ -27,7 +27,7 @@ def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
     plus_di_s = 100 * plus_dm.ewm(alpha=alpha, adjust=False, min_periods=period).mean() / atr_s
     minus_di_s = 100 * minus_dm.ewm(alpha=alpha, adjust=False, min_periods=period).mean() / atr_s
 
-    dx = (100 * (plus_di_s - minus_di_s).abs() / (plus_di_s + minus_di_s).replace(0, float("nan")))
+    dx = 100 * (plus_di_s - minus_di_s).abs() / (plus_di_s + minus_di_s).replace(0, float("nan"))
     adx_s = dx.ewm(alpha=alpha, adjust=False, min_periods=period).mean()
 
     return pd.DataFrame(

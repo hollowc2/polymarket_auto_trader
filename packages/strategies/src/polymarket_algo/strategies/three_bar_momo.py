@@ -13,10 +13,10 @@ class ThreeBarMoMoStrategy:
     @property
     def default_params(self) -> dict[str, Any]:
         return {
-            "bars": 3,           # consecutive qualifying bars required
-            "size": 15.0,        # base bet in USD
-            "size_cap": 2.0,     # max multiplier for vol-scaled size
-            "min_body_pct": 0.0, # min candle body as % of close (0 = off)
+            "bars": 3,  # consecutive qualifying bars required
+            "size": 15.0,  # base bet in USD
+            "size_cap": 2.0,  # max multiplier for vol-scaled size
+            "min_body_pct": 0.0,  # min candle body as % of close (0 = off)
         }
 
     @property
@@ -42,42 +42,20 @@ class ThreeBarMoMoStrategy:
         volumes = candles["volume"]
 
         # All N bars same direction (non-zero)
-        all_bullish = (
-            (direction == 1)
-            .rolling(bars, min_periods=bars)
-            .min()
-            .fillna(0)
-            .astype(bool)
-        )
-        all_bearish = (
-            (direction == -1)
-            .rolling(bars, min_periods=bars)
-            .min()
-            .fillna(0)
-            .astype(bool)
-        )
+        all_bullish = (direction == 1).rolling(bars, min_periods=bars).min().fillna(0).astype(bool)
+        all_bearish = (direction == -1).rolling(bars, min_periods=bars).min().fillna(0).astype(bool)
 
         # Strictly increasing volume: bars-1 consecutive positive diffs
         if bars > 1:
             all_vol_increasing = (
-                (volumes.diff() > 0)
-                .rolling(bars - 1, min_periods=bars - 1)
-                .min()
-                .fillna(0)
-                .astype(bool)
+                (volumes.diff() > 0).rolling(bars - 1, min_periods=bars - 1).min().fillna(0).astype(bool)
             )
         else:
             all_vol_increasing = pd.Series(True, index=candles.index)
 
         # Optional minimum body size filter
         if min_body_pct > 0:
-            body_ok = (
-                (body_pct >= min_body_pct)
-                .rolling(bars, min_periods=bars)
-                .min()
-                .fillna(0)
-                .astype(bool)
-            )
+            body_ok = (body_pct >= min_body_pct).rolling(bars, min_periods=bars).min().fillna(0).astype(bool)
         else:
             body_ok = pd.Series(True, index=candles.index)
 

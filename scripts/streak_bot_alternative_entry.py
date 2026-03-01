@@ -175,8 +175,10 @@ def main():
         log("LIVE trading mode - Real money!")
 
     log(f"Strategy : {strategy.name} (alternative entry)")
-    log(f"Timeframe: {timeframe}  (fires every {window_seconds // 60} min, "
-        f"trigger={trigger}, group={group_size} outcomes/bar)")
+    log(
+        f"Timeframe: {timeframe}  (fires every {window_seconds // 60} min, "
+        f"trigger={trigger}, group={group_size} outcomes/bar)"
+    )
     log(f"Max bet  : ${bet_amount:.2f} | Bankroll: ${state.bankroll:.2f}")
     log(f"Limits   : max {Config.MAX_DAILY_BETS} bets/day, max ${Config.MAX_DAILY_LOSS} loss/day")
     log(f"Timezone : {TIMEZONE_NAME}")
@@ -289,7 +291,7 @@ def main():
                 time.sleep(5)
                 continue
 
-            log(f"{timeframe} bars: {' -> '.join(o.upper() for o in outcomes[-trigger - 2:])}")
+            log(f"{timeframe} bars: {' -> '.join(o.upper() for o in outcomes[-trigger - 2 :])}")
 
             # === EVALUATE VIA STRATEGY PROTOCOL ===
             candles = outcomes_to_candles(outcomes)
@@ -360,10 +362,7 @@ def main():
                 discount = discounts.get(streak_len, fallback_discount)
                 limit_price = max(0.01, round(current_ask - discount, 4))
 
-                log(
-                    f"[limit] Placing GTC bid @ {limit_price:.4f} "
-                    f"(ask={current_ask:.4f}, discount={discount:.3f})"
-                )
+                log(f"[limit] Placing GTC bid @ {limit_price:.4f} (ask={current_ask:.4f}, discount={discount:.3f})")
 
                 trade = trader.place_limit_bet(
                     market=market,

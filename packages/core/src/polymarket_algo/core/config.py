@@ -109,6 +109,7 @@ class Config:
     )
     try:
         import json as _json
+
         ALT_ENTRY_DISCOUNTS: dict[int, float] = {
             int(k): float(v) for k, v in _json.loads(_alt_entry_discounts_raw).items()
         }

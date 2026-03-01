@@ -450,6 +450,79 @@ class PolymarketClient:
             return 0.0
         return price * (1 - price) * base_fee_bps / 10000
 
+    # ── Limit order helpers (require py-clob-client with auth) ────────────────
+
+    def place_limit_order(self, token_id: str, price: float, shares: float) -> str | None:
+        """Post a GTC limit buy order on the live CLOB.
+
+        Args:
+            token_id: Token to buy
+            price: Limit price (0–1)
+            shares: Number of shares to buy
+
+        Returns:
+            order_id string if successful, None on failure.
+
+        Note: Requires py-clob-client ClobClient with API credentials.
+              This method is a thin wrapper; trading logic lives in LiveTrader.
+        """
+        try:
+            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.order_builder.constants import BUY
+
+            order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=BUY)
+            signed = self._clob_client.create_order(order_args)  # type: ignore[unresolved-attribute]
+            resp = self._clob_client.post_order(signed, OrderType.GTC)  # type: ignore[unresolved-attribute, invalid-argument-type]
+            resp_dict: dict = resp if isinstance(resp, dict) else {}
+            return resp_dict.get("orderID", resp_dict.get("id"))
+        except AttributeError:
+            print("[polymarket] place_limit_order requires an authenticated ClobClient (self._clob_client not set)")
+            return None
+        except Exception as e:
+            print(f"[polymarket] place_limit_order failed: {e}")
+            return None
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an open GTC order.
+
+        Returns True on success, False on failure.
+        Requires authenticated ClobClient.
+        """
+        try:
+            self._clob_client.cancel({"orderID": order_id})  # type: ignore[unresolved-attribute]
+            return True
+        except AttributeError:
+            print("[polymarket] cancel_order requires an authenticated ClobClient (self._clob_client not set)")
+            return False
+        except Exception as e:
+            print(f"[polymarket] cancel_order({order_id}) failed: {e}")
+            return False
+
+    def get_order_status(self, order_id: str) -> dict:
+        """Return fill status for an open order.
+
+        Returns dict with keys: filled (bool), fill_price (float|None), filled_size (float).
+        Requires authenticated ClobClient.
+        """
+        try:
+            order = self._clob_client.get_order(order_id)  # type: ignore[unresolved-attribute]
+            if not isinstance(order, dict):
+                return {"filled": False, "fill_price": None, "filled_size": 0.0}
+            status = order.get("status", "").upper()
+            if status in ("FILLED", "MATCHED"):
+                return {
+                    "filled": True,
+                    "fill_price": float(order.get("price", 0)),
+                    "filled_size": float(order.get("size_matched", order.get("size", 0))),
+                }
+            return {"filled": False, "fill_price": None, "filled_size": 0.0}
+        except AttributeError:
+            print("[polymarket] get_order_status requires an authenticated ClobClient (self._clob_client not set)")
+            return {"filled": False, "fill_price": None, "filled_size": 0.0}
+        except Exception as e:
+            print(f"[polymarket] get_order_status({order_id}) failed: {e}")
+            return {"filled": False, "fill_price": None, "filled_size": 0.0}
+
     def get_execution_price(
         self, token_id: str, side: str, amount_usd: float, copy_delay_ms: int = 0
     ) -> tuple[float, float, float, float, float, dict | None]:
